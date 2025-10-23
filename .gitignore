@@ -1,0 +1,84 @@
+# ============================================================
+#  PYTHON + ENVIRONMENT FILES
+# ============================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env/
+env/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# macOS specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# VSCode / JetBrains IDE settings
+.vscode/
+.idea/
+
+# ============================================================
+#  DATASET & OUTPUT FILES
+# ============================================================
+
+# Raw datasets (too large to commit)
+raw_pcaps/
+categorized_pcaps/
+sample_data/
+zips/
+
+# Processed outputs
+processed_data/
+processed_test/
+processed_train/
+flows/
+idx/
+*.idx3-ubyte
+*.idx1-ubyte
+
+# Temporary test outputs
+tmp/
+logs/
+*.log
+
+# NumPy binary arrays
+*.npy
+*.npz
+
+# ============================================================
+#  ARCHIVES & MISC FILES
+# ============================================================
+
+# Zip / tar / backup files
+*.zip
+*.tar
+*.tar.gz
+*.bak
+
+# OS thumbnails or cache
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ============================================================
+#  PROJECT SPECIFIC
+# ============================================================
+
+# Cache or intermediate files
+*.pcap~
+*.pcapng~
+*_flow*.pcap
+*_flow*.pcapng
+*.pcap
+*.pcapng
+# Backup scripts or generated Python files
+test_*.py
+debug_*.py
