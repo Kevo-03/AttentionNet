@@ -146,7 +146,7 @@ def write_idx(data_array, label_array):
     label_path = os.path.join(IDX_DIR, "train-labels.idx1-ubyte")
 
     with open(data_path, "wb") as f:
-        f.write(struct.pack('>IIIII', 0x00000803, len(data_array), ROWS, COLS, CHANNELS))
+        f.write(struct.pack('>IIII', 0x00000803, len(data_array), ROWS, COLS))
         for x in data_array:
             f.write(x.tobytes())
 
@@ -170,7 +170,7 @@ def run_step3_write_idx():
 # ======================================================
 if __name__ == "__main__":
     # Uncomment only one at a time when testing!
-    run_step1_split_all()
+    #run_step1_split_all()
     # run_step2_convert_bytes()
-    # run_step3_write_idx()
+    run_step3_write_idx()
     pass
