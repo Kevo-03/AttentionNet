@@ -39,9 +39,11 @@ def split_to_flows(pcap_path, output_dir):
         if IP in pkt and (TCP in pkt or UDP in pkt):
             ip = pkt[IP]
             proto = ip.proto
+            sorted_ips = tuple(sorted((ip.src,ip.dst)))
             sport = getattr(pkt, 'sport', 0)
             dport = getattr(pkt, 'dport', 0)
-            key = (ip.src, ip.dst, sport, dport, proto)
+            sorted_ports = tuple(sorted((sport,dport)))
+            key = (sorted_ips[0], sorted_ips[1], sorted_ports[0], sorted_ports[1], proto)
             flows[key].append(pkt)
             count += 1
 
@@ -143,5 +145,5 @@ def run_step2_extract_and_clean():
 # Run Steps
 # ======================================================
 if __name__ == "__main__":
-    #run_step1_split_all()
+    run_step1_split_all()
     run_step2_extract_and_clean()
