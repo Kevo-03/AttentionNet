@@ -1,16 +1,18 @@
 import os
-from scapy.all import rdpcap, wrpcap
+from scapy.all import rdpcap, wrpcap, IP, TCP, UDP
 from collections import defaultdict
 import numpy as np
 import struct
 from tqdm import tqdm
 
+
 # --- CONFIG ---
-RAW_DIR = "sample_data"          
+RAW_DIR = "categorized_pcaps"          
 FLOW_DIR = "processed_test/flows"
 IDX_DIR = "processed_test/idx"
 MAX_LEN = 784  # bytes per flow
 MAX_FILES = 2
+MAX_FLOWS = 9
 ROWS, COLS, CHANNELS = 28, 28, 1
 os.makedirs(FLOW_DIR, exist_ok=True)
 os.makedirs(IDX_DIR, exist_ok=True)
@@ -26,8 +28,11 @@ def split_to_flows(pcap_path, output_dir):
         print(f"[!] Could not read {pcap_path}: {e}")
         return
 
+    flow_count = 0
     flows = defaultdict(list)
     for pkt in packets:
+        if flow_count > MAX_FLOWS:
+            break
         if IP in pkt:
             proto = pkt[IP].proto
             if proto not in (6, 17):  # TCP or UDP
@@ -38,6 +43,7 @@ def split_to_flows(pcap_path, output_dir):
             dport = getattr(pkt, 'dport', 0)
             key = (src, dst, sport, dport, proto)
             flows[key].append(pkt)
+        flow_count = flow_count + 1
 
     os.makedirs(output_dir, exist_ok=True)  # ✅ Ensure target folder exists
 
@@ -72,20 +78,30 @@ def run_step1_split_all():
 # STEP 2: Convert flows to byte arrays
 # ======================================================
 def pcap_to_bytes(pcap_path):
-    """Read one pcap and return a padded/truncated 1D byte array."""
+    payload_bytes = b""
     try:
-        with open(pcap_path, 'rb') as f:
-            data = f.read()
-        arr = np.frombuffer(data, dtype=np.uint8)
-        if len(arr) > MAX_LEN:
-            arr = arr[:MAX_LEN]
-        elif len(arr) < MAX_LEN:
-            arr = np.pad(arr, (0, MAX_LEN - len(arr)), 'constant')
-        return arr
-    except Exception as e:
-        print(f"[!] Error in {pcap_path}: {e}")
-        return None
+        packets = rdpcap(pcap_path)
 
+        for pkt in packets:
+            if len(payload_bytes) >= MAX_LEN:
+                break
+
+            if IP in pkt:
+                # Use IP-layer bytes (includes TCP/UDP header + payload)
+                payload_bytes += bytes(pkt[IP])
+
+        arr = np.frombuffer(payload_bytes, dtype=np.uint8)
+
+        if len(arr) < MAX_LEN:
+            arr = np.pad(arr, (0, MAX_LEN - len(arr)), 'constant', constant_values=0)
+        else:
+            arr = arr[:MAX_LEN]
+
+        return arr.reshape(ROWS, COLS)
+
+    except Exception as e:
+        print(f"[!] Error processing {pcap_path}: {e}")
+        return None
 
 # --- STEP 2: Convert flows to byte arrays with detailed labels ---
 def run_step2_convert_bytes():
@@ -171,6 +187,6 @@ def run_step3_write_idx():
 if __name__ == "__main__":
     # Uncomment only one at a time when testing!
     #run_step1_split_all()
-    # run_step2_convert_bytes()
-    run_step3_write_idx()
+    run_step2_convert_bytes()
+    #run_step3_write_idx()
     pass
