@@ -1,10 +1,17 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import random
 
+script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(script_path)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
+IMAGE_DIR = os.path.join(PROJECT_ROOT,"processed_test/idx/data.npy")
+LABELS_DIR = os.path.join(PROJECT_ROOT,"processed_test/idx/labels.npy")
+
 # Load processed data
-images = np.load("processed_test/idx/data.npy")   # shape (N, 28, 28)
-labels = np.load("processed_test/idx/labels.npy") # shape (N,)
+images = np.load(IMAGE_DIR)   # shape (N, 28, 28)
+labels = np.load(LABELS_DIR) # shape (N,)
 
 # Label mapping for display
 class_names = {

@@ -6,9 +6,12 @@ import hashlib
 from tqdm import tqdm
 
 # --- CONFIG ---
-RAW_DIR = "categorized_pcaps"
-FLOW_DIR = "processed_test/flows"
-IDX_DIR = "processed_test/idx"
+script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(script_path)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
+RAW_DIR = os.path.join(PROJECT_ROOT, "categorized_pcaps")
+FLOW_DIR = os.path.join(PROJECT_ROOT,"processed_test/flows")
+IDX_DIR = os.path.join(PROJECT_ROOT,"processed_test/idx")
 MAX_LEN = 784  # 28x28
 MAX_FILES_PER_CLASS = 4   # only for testing small previews
 MAX_FLOWS_PER_PCAP = 10   # reduce splitting to speed up
