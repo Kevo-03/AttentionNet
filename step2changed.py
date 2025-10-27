@@ -76,28 +76,49 @@ def run_step1_split_all():
 # Step 2: Extract payload → image
 # ================================
 def extract_payload_array(pcap_path):
-    payload = b""
+    all_packet_bytes = b"" # This will now hold full packet bytes
 
-    packets = rdpcap(pcap_path)
-    for pkt in packets:
-        if len(payload) >= MAX_LEN:
-            break
-
-        #Get only the TCP and UDP payload
-        if TCP in pkt:
-            payload += bytes(pkt[TCP].payload)
-        elif UDP in pkt:
-            payload += bytes(pkt[UDP].payload)
-
-    # Remove empty flows
-    if len(payload) == 0:
+    try:
+        packets = rdpcap(pcap_path)
+    except:
+        print(f"[!] Could not read {pcap_path}")
         return None
 
-    arr = np.frombuffer(payload, dtype=np.uint8)
+    for pkt in packets:
+        if len(all_packet_bytes) >= MAX_LEN:
+            break
+
+        # We only care about IP packets
+        if IP in pkt:
+            
+            # --- ANONYMIZATION STEP ---
+            # Create a copy to avoid changing the original packet list
+            pkt_copy = pkt.copy()
+            
+            # Set IPs to 0.0.0.0 (or any constant)
+            pkt_copy[IP].src = "0.0.0.0"
+            pkt_copy[IP].dst = "0.0.0.0"
+            
+            # Remove MAC addresses if they exist
+            if "Ether" in pkt_copy:
+                pkt_copy["Ether"].src = "00:00:00:00:00:00"
+                pkt_copy["Ether"].dst = "00:00:00:00:00:00"
+            # --- END ANONYMIZATION ---
+
+            # Now, add the bytes of the *entire* anonymized packet
+            all_packet_bytes += bytes(pkt_copy)
+
+    # Remove empty flows
+    if len(all_packet_bytes) == 0:
+        return None
+
+    # Pad or truncate the full packet data
+    arr = np.frombuffer(all_packet_bytes, dtype=np.uint8)
     if len(arr) >= MAX_LEN:
         arr = arr[:MAX_LEN]
     else:
         arr = np.pad(arr, (0, MAX_LEN - len(arr)), 'constant', constant_values=0)
+    
     return arr.reshape(ROWS, COLS)
 
 
