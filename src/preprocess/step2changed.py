@@ -36,9 +36,6 @@ def split_to_flows(pcap_path, output_dir):
 
     #Limit splitted flows for testing
     for pkt in packets:
-        if count >= MAX_FLOWS_PER_PCAP:
-            break
-
         if IP in pkt and (TCP in pkt or UDP in pkt):
             ip = pkt[IP]
             proto = ip.proto
@@ -48,13 +45,17 @@ def split_to_flows(pcap_path, output_dir):
             sorted_ports = tuple(sorted((sport,dport)))
             key = (sorted_ips[0], sorted_ips[1], sorted_ports[0], sorted_ports[1], proto)
             flows[key].append(pkt)
-            count += 1
 
     os.makedirs(output_dir, exist_ok=True)
     base = os.path.basename(pcap_path).rsplit(".", 1)[0]
 
+    flow_count = 0
     for idx, pkts in enumerate(flows.values()):
-        wrpcap(os.path.join(output_dir, f"{base}_flow{idx}.pcap"), pkts)
+        if flow_count >= MAX_FLOWS_PER_PCAP:
+            break
+        if len(pkts) > 0:
+            wrpcap(os.path.join(output_dir, f"{base}_flow{idx}.pcap"), pkts)
+            flow_count += 1
 
 
 def run_step1_split_all():
@@ -74,13 +75,49 @@ def run_step1_split_all():
                 if fname.endswith((".pcap", ".pcapng")):
                     split_to_flows(os.path.join(category_dir, fname), output_dir)
 
+def is_retransmission(pkt, seen_seq_nums):
+    """
+    Detect TCP retransmissions by tracking sequence numbers.
+    A retransmission occurs when we see the same seq number twice.
+    """
+    if TCP not in pkt:
+        return False
+    
+    tcp = pkt[TCP]
+    ip = pkt[IP]
+    
+    # Create a unique key for this connection direction
+    key = (ip.src, ip.dst, tcp.sport, tcp.dport, tcp.seq)
+    
+    if key in seen_seq_nums:
+        return True
+    
+    seen_seq_nums.add(key)
+    return False
 
+def is_corrupted(pkt):
+    """
+    Basic corruption detection - check if packet has obvious issues.
+    More advanced checks could validate checksums.
+    """
+    try:
+        # Check if packet has minimum required fields
+        if IP not in pkt:
+            return True
+        
+        # Check for zero-length packets with no payload
+        if len(bytes(pkt)) == 0:
+            return True
+            
+        return False
+    except:
+        return True
 # ================================
 # Step 2: Extract payload → image
 # ================================
 def extract_payload_array(pcap_path):
     all_packet_bytes = b"" # This will now hold full packet bytes
-
+    seen_seq_nums = set()
     try:
         packets = rdpcap(pcap_path)
     except:
@@ -91,10 +128,13 @@ def extract_payload_array(pcap_path):
         if len(all_packet_bytes) >= MAX_LEN:
             break
 
+        if is_corrupted(pkt):
+            continue
+        if is_retransmission(pkt, seen_seq_nums):
+            continue
+
         # We only care about IP packets
         if IP in pkt:
-            
-            # --- ANONYMIZATION STEP ---
             # Create a copy to avoid changing the original packet list
             pkt_copy = pkt.copy()
             
