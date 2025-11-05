@@ -6,33 +6,28 @@ import random
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
-IMAGE_DIR = os.path.join(PROJECT_ROOT,"processed_test/idx/data.npy")
-LABELS_DIR = os.path.join(PROJECT_ROOT,"processed_test/idx/labels.npy")
+IMAGE_DIR = os.path.join(PROJECT_ROOT,"processed_data/idx/data.npy")
+LABELS_DIR = os.path.join(PROJECT_ROOT,"processed_data/idx/labels.npy")
 
-# Load processed data
 images = np.load(IMAGE_DIR)   # shape (N, 28, 28)
 labels = np.load(LABELS_DIR) # shape (N,)
 
-# Label mapping for display
 class_names = {
     0: "Chat (NonVPN)",
     1: "Email (NonVPN)",
     2: "File (NonVPN)",
-    3: "P2P (NonVPN)",
-    4: "Streaming (NonVPN)",
-    5: "VoIP (NonVPN)",
-    6: "Chat (VPN)",
-    7: "Email (VPN)",
-    8: "File (VPN)",
-    9: "P2P (VPN)",
-    10: "Streaming (VPN)",
-    11: "VoIP (VPN)",
+    3: "Streaming (NonVPN)",
+    4: "VoIP (NonVPN)",
+    5: "Chat (VPN)",
+    6: "Email (VPN)",
+    7: "File (VPN)",
+    8: "P2P (VPN)",
+    9: "Streaming (VPN)",
+    10: "VoIP (VPN)",
 }
 
-# How many samples to show per class
 SAMPLES = 9
 
-# Prepare figure
 plt.figure(figsize=(12, 18))
 
 for label in range(12):
@@ -46,13 +41,11 @@ for label in range(12):
                                    size=min(SAMPLES, len(class_imgs)),
                                    replace=False)
 
-    # Create a subplot for this class
     for i, idx in enumerate(sample_idxs):
         plt.subplot(12, SAMPLES, label*SAMPLES + i + 1)
         plt.imshow(class_imgs[idx], cmap="gray")
         plt.axis("off")
 
-        # Only label first image in the row
         if i == 0:
             plt.title(class_names[label], fontsize=8, pad=4)
 
