@@ -1,405 +1,278 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from collections import Counter
-import seaborn as sns
+from matplotlib.gridspec import GridSpec
 
-# --- CONFIG ---
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
-IDX_DIR = os.path.join(PROJECT_ROOT, "processed_test/idx")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_test/visualizations")
+IMAGE_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/data.npy")
+LABELS_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/labels.npy")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/visualizations")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Set style for better-looking plots
-sns.set_style("whitegrid")
-plt.rcParams['figure.figsize'] = (15, 10)
+# Load data
+print("[+] Loading data...")
+images = np.load(IMAGE_DIR)   # shape (N, 28, 28)
+labels = np.load(LABELS_DIR)  # shape (N,)
 
+class_names = {
+    0: "Chat (NonVPN)",
+    1: "Email (NonVPN)",
+    2: "File (NonVPN)",
+    3: "Streaming (NonVPN)",
+    4: "VoIP (NonVPN)",
+    5: "Chat (VPN)",
+    6: "Email (VPN)",
+    7: "File (VPN)",
+    8: "P2P (VPN)",
+    9: "Streaming (VPN)",
+    10: "VoIP (VPN)",
+}
 
-def load_detailed_data():
-    """Load all the detailed data"""
-    print("[+] Loading detailed dataset...")
-    
-    images = np.load(os.path.join(IDX_DIR, "new_data_images.npy"))
-    labels = np.load(os.path.join(IDX_DIR, "data_labels_detailed.npy"))
-    app_types = np.load(os.path.join(IDX_DIR, "data_app_types.npy"))
-    apps = np.load(os.path.join(IDX_DIR, "data_apps.npy"))
-    vpn_types = np.load(os.path.join(IDX_DIR, "data_vpn_types.npy"))
-    
-    print(f"    Loaded {len(images)} samples")
-    return images, labels, app_types, apps, vpn_types
+# =====================================
+# 1. Dataset Statistics Report
+# =====================================
+print("\n" + "="*60)
+print("DATASET STATISTICS")
+print("="*60)
+print(f"Total images: {len(images)}")
+print(f"Image shape: {images[0].shape}")
+print(f"\nLabel distribution:")
 
+unique_labels, counts = np.unique(labels, return_counts=True)
+for lbl, count in zip(unique_labels, counts):
+    percentage = (count / len(labels)) * 100
+    print(f"  Label {lbl:2d} - {class_names.get(lbl, 'Unknown'):20s}: {count:6d} samples ({percentage:5.2f}%)")
 
-def visualize_sample_images_grid(images, labels):
-    """
-    Visualize sample images in a grid format (like visualize.py)
-    Shows multiple samples per detailed label in rows
-    Split into multiple figures for better readability
-    """
-    print("[+] Visualizing sample images grid (multiple samples per label)...")
+# Calculate data density statistics
+print("\nData Density Analysis:")
+for lbl in unique_labels:
+    class_imgs = images[labels == lbl]
+    non_zero_percentages = np.mean(class_imgs > 0, axis=(1, 2)) * 100
+    avg_density = np.mean(non_zero_percentages)
+    print(f"  {class_names.get(lbl, 'Unknown'):20s}: {avg_density:5.2f}% avg non-zero pixels")
+
+# =====================================
+# 2. Large Grid Visualization (50 samples per class)
+# =====================================
+print("\n[+] Creating comprehensive grid visualization...")
+
+SAMPLES_PER_CLASS = 50
+COLS = 10
+ROWS_PER_CLASS = (SAMPLES_PER_CLASS + COLS - 1) // COLS  # Ceiling division
+
+# Create one large figure
+total_classes = len(unique_labels)
+fig = plt.figure(figsize=(20, total_classes * ROWS_PER_CLASS * 2.2))
+gs = GridSpec(total_classes * ROWS_PER_CLASS, COLS, figure=fig, hspace=0.3, wspace=0.05)
+
+for class_idx, label in enumerate(sorted(unique_labels)):
+    class_imgs = images[labels == label]
+    num_to_show = min(SAMPLES_PER_CLASS, len(class_imgs))
     
-    unique_labels = sorted(np.unique(labels))
-    SAMPLES_PER_CLASS = 6  # Number of samples to show per label
-    LABELS_PER_FIGURE = 10  # Number of labels per figure to keep images large enough
+    # Calculate starting row for this class
+    start_row = class_idx * ROWS_PER_CLASS
     
-    # Split labels into chunks for multiple figures
-    def chunks(lst, n):
-        """Yield successive n-sized chunks from lst."""
-        for i in range(0, len(lst), n):
-            yield lst[i:i + n]
-    
-    label_chunks = list(chunks(unique_labels, LABELS_PER_FIGURE))
-    print(f"    Creating {len(label_chunks)} separate figures ({LABELS_PER_FIGURE} labels each)")
-    
-    # Create a figure for each chunk
-    for fig_num, label_chunk in enumerate(label_chunks, 1):
-        n_classes_in_chunk = len(label_chunk)
-        fig_height = max(n_classes_in_chunk * 1.5, 8)
+    for i in range(num_to_show):
+        row = start_row + (i // COLS)
+        col = i % COLS
         
-        plt.figure(figsize=(18, fig_height))
+        ax = fig.add_subplot(gs[row, col])
+        ax.imshow(class_imgs[i], cmap='gray', vmin=0, vmax=255)
+        ax.axis('off')
         
-        for row_idx, label in enumerate(label_chunk):
-            # Get all images for this label
-            class_imgs = images[labels == label]
-            
-            if len(class_imgs) == 0:
-                print(f"    No samples for label: {label}")
-                continue
-            
-            # Sample random images (or all if less than SAMPLES_PER_CLASS)
-            n_samples = min(SAMPLES_PER_CLASS, len(class_imgs))
-            sample_idxs = np.random.choice(len(class_imgs), size=n_samples, replace=False)
-            
-            # Create subplots for this row
-            for col_idx, idx in enumerate(sample_idxs):
-                plt.subplot(n_classes_in_chunk, SAMPLES_PER_CLASS, 
-                           row_idx * SAMPLES_PER_CLASS + col_idx + 1)
-                plt.imshow(class_imgs[idx], cmap='gray', interpolation='nearest')
-                plt.axis('off')
-                
-                # Only label the first image in each row
-                if col_idx == 0:
-                    plt.title(label, fontsize=9, pad=3, loc='left', fontweight='bold')
+        # Add sample number on first of each row
+        if col == 0:
+            ax.text(-0.1, 0.5, f"#{i}-{i+COLS-1}", transform=ax.transAxes,
+                   fontsize=8, va='center', ha='right')
+    
+    # Add class label on the left of first row
+    ax = fig.add_subplot(gs[start_row, 0])
+    ax.text(-0.15, 1.2, f"Label {label}: {class_names.get(label, 'Unknown')}",
+           transform=ax.transAxes, fontsize=12, fontweight='bold', va='bottom')
+
+plt.savefig(os.path.join(OUTPUT_DIR, "comprehensive_grid_50_per_class.png"), 
+           dpi=150, bbox_inches='tight')
+print(f"  Saved: comprehensive_grid_50_per_class.png")
+plt.close()
+
+# =====================================
+# 3. Density-Filtered Visualization (only rich samples)
+# =====================================
+print("\n[+] Creating density-filtered visualization (rich samples only)...")
+
+DENSITY_THRESHOLD = 10  # At least 10% non-zero pixels
+SAMPLES_PER_CLASS = 30
+COLS = 10
+
+fig = plt.figure(figsize=(20, total_classes * 3.5))
+gs = GridSpec(total_classes * 3, COLS, figure=fig, hspace=0.3, wspace=0.05)
+
+for class_idx, label in enumerate(sorted(unique_labels)):
+    class_imgs = images[labels == label]
+    
+    # Filter for images with sufficient data density
+    densities = np.mean(class_imgs > 0, axis=(1, 2)) * 100
+    rich_indices = np.where(densities >= DENSITY_THRESHOLD)[0]
+    
+    if len(rich_indices) == 0:
+        print(f"  Warning: No rich samples found for label {label}")
+        continue
+    
+    # Take first N rich samples
+    rich_imgs = class_imgs[rich_indices[:SAMPLES_PER_CLASS]]
+    num_to_show = len(rich_imgs)
+    
+    start_row = class_idx * 3
+    
+    for i in range(min(num_to_show, SAMPLES_PER_CLASS)):
+        row = start_row + (i // COLS)
+        col = i % COLS
         
-        plt.suptitle(f'Detailed Labels - Part {fig_num}/{len(label_chunks)}', 
-                     fontsize=14, fontweight='bold', y=0.995)
-        plt.tight_layout()
+        ax = fig.add_subplot(gs[row, col])
+        ax.imshow(rich_imgs[i], cmap='gray', vmin=0, vmax=255)
+        ax.axis('off')
+    
+    # Add class label
+    ax = fig.add_subplot(gs[start_row, 0])
+    ax.text(-0.15, 1.2, f"Label {label}: {class_names.get(label, 'Unknown')} ({len(rich_indices)} rich samples)",
+           transform=ax.transAxes, fontsize=12, fontweight='bold', va='bottom')
+
+plt.savefig(os.path.join(OUTPUT_DIR, "rich_samples_only.png"), 
+           dpi=150, bbox_inches='tight')
+print(f"  Saved: rich_samples_only.png")
+plt.close()
+
+# =====================================
+# 4. Random Sample Visualization
+# =====================================
+print("\n[+] Creating random sample visualization...")
+
+SAMPLES_PER_CLASS = 30
+COLS = 10
+
+fig = plt.figure(figsize=(20, total_classes * 3.5))
+gs = GridSpec(total_classes * 3, COLS, figure=fig, hspace=0.3, wspace=0.05)
+
+np.random.seed(42)  # For reproducibility
+
+for class_idx, label in enumerate(sorted(unique_labels)):
+    class_imgs = images[labels == label]
+    num_available = len(class_imgs)
+    num_to_show = min(SAMPLES_PER_CLASS, num_available)
+    
+    # Random sampling
+    random_indices = np.random.choice(num_available, size=num_to_show, replace=False)
+    random_imgs = class_imgs[random_indices]
+    
+    start_row = class_idx * 3
+    
+    for i in range(num_to_show):
+        row = start_row + (i // COLS)
+        col = i % COLS
         
-        # Save each figure separately
-        output_file = os.path.join(OUTPUT_DIR, f"sample_images_grid_part{fig_num}.png")
-        plt.savefig(output_file, dpi=150, bbox_inches='tight')
-        print(f"    Saved: sample_images_grid_part{fig_num}.png")
-        plt.close()
+        ax = fig.add_subplot(gs[row, col])
+        ax.imshow(random_imgs[i], cmap='gray', vmin=0, vmax=255)
+        ax.axis('off')
+    
+    # Add class label
+    ax = fig.add_subplot(gs[start_row, 0])
+    ax.text(-0.15, 1.2, f"Label {label}: {class_names.get(label, 'Unknown')}",
+           transform=ax.transAxes, fontsize=12, fontweight='bold', va='bottom')
 
+plt.savefig(os.path.join(OUTPUT_DIR, "random_samples_30_per_class.png"), 
+           dpi=150, bbox_inches='tight')
+print(f"  Saved: random_samples_30_per_class.png")
+plt.close()
 
-def visualize_distribution_by_app_type(app_types):
-    """Visualize distribution of samples by application type"""
-    print("[+] Visualizing distribution by app type...")
-    
-    app_type_counts = Counter(app_types)
-    
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    categories = list(app_type_counts.keys())
-    counts = list(app_type_counts.values())
-    colors = plt.cm.Set3(range(len(categories)))
-    
-    bars = ax.bar(categories, counts, color=colors, edgecolor='black', linewidth=1.5)
-    ax.set_xlabel('Application Type', fontsize=14, fontweight='bold')
-    ax.set_ylabel('Number of Samples', fontsize=14, fontweight='bold')
-    ax.set_title('Distribution of Samples by Application Type', fontsize=16, fontweight='bold')
-    ax.grid(axis='y', alpha=0.3)
-    
-    # Add value labels on bars
-    for bar in bars:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-                f'{int(height)}',
-                ha='center', va='bottom', fontsize=10, fontweight='bold')
-    
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, "distribution_by_app_type.png"), dpi=150, bbox_inches='tight')
-    print(f"    Saved: distribution_by_app_type.png")
-    plt.close()
+# =====================================
+# 5. Density Distribution Histograms
+# =====================================
+print("\n[+] Creating density distribution analysis...")
 
+fig, axes = plt.subplots(3, 4, figsize=(16, 12))
+axes = axes.flatten()
 
-def visualize_distribution_by_app(apps):
-    """Visualize distribution of samples by specific application"""
-    print("[+] Visualizing distribution by specific app...")
+for idx, label in enumerate(sorted(unique_labels)):
+    if idx >= len(axes):
+        break
     
-    app_counts = Counter(apps)
+    class_imgs = images[labels == label]
+    densities = np.mean(class_imgs > 0, axis=(1, 2)) * 100
     
-    fig, ax = plt.subplots(figsize=(14, 7))
-    
-    # Sort by count descending
-    sorted_apps = sorted(app_counts.items(), key=lambda x: x[1], reverse=True)
-    apps_list = [item[0] for item in sorted_apps]
-    counts = [item[1] for item in sorted_apps]
-    
-    colors = plt.cm.tab20(range(len(apps_list)))
-    
-    bars = ax.bar(apps_list, counts, color=colors, edgecolor='black', linewidth=1.5)
-    ax.set_xlabel('Application Name', fontsize=14, fontweight='bold')
-    ax.set_ylabel('Number of Samples', fontsize=14, fontweight='bold')
-    ax.set_title('Distribution of Samples by Specific Application', fontsize=16, fontweight='bold')
-    ax.grid(axis='y', alpha=0.3)
-    
-    # Add value labels on bars
-    for bar in bars:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-                f'{int(height)}',
-                ha='center', va='bottom', fontsize=8, fontweight='bold')
-    
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, "distribution_by_app.png"), dpi=150, bbox_inches='tight')
-    print(f"    Saved: distribution_by_app.png")
-    plt.close()
+    ax = axes[idx]
+    ax.hist(densities, bins=50, edgecolor='black', alpha=0.7)
+    ax.axvline(np.mean(densities), color='red', linestyle='--', 
+              label=f'Mean: {np.mean(densities):.1f}%')
+    ax.axvline(np.median(densities), color='green', linestyle='--',
+              label=f'Median: {np.median(densities):.1f}%')
+    ax.set_title(f"Label {label}: {class_names.get(label, 'Unknown')}", fontsize=10)
+    ax.set_xlabel('Data Density (%)')
+    ax.set_ylabel('Frequency')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
 
+plt.tight_layout()
+plt.savefig(os.path.join(OUTPUT_DIR, "density_distributions.png"), 
+           dpi=150, bbox_inches='tight')
+print(f"  Saved: density_distributions.png")
+plt.close()
 
-def visualize_vpn_comparison(vpn_types, app_types):
-    """Compare VPN vs NonVPN across application types"""
-    print("[+] Visualizing VPN vs NonVPN comparison...")
+# =====================================
+# 6. Summary Report
+# =====================================
+report_path = os.path.join(OUTPUT_DIR, "visualization_report.txt")
+with open(report_path, 'w') as f:
+    f.write("="*60 + "\n")
+    f.write("COMPREHENSIVE DATASET VISUALIZATION REPORT\n")
+    f.write("="*60 + "\n\n")
     
-    # Create contingency table
-    vpn_app_pairs = list(zip(vpn_types, app_types))
+    f.write(f"Total samples: {len(images)}\n")
+    f.write(f"Image shape: {images[0].shape}\n\n")
     
-    unique_app_types = sorted(set(app_types))
-    unique_vpn_types = sorted(set(vpn_types))
+    f.write("Label Distribution:\n")
+    f.write("-" * 60 + "\n")
+    for lbl, count in zip(unique_labels, counts):
+        percentage = (count / len(labels)) * 100
+        f.write(f"  Label {lbl:2d} - {class_names.get(lbl, 'Unknown'):20s}: "
+               f"{count:6d} ({percentage:5.2f}%)\n")
     
-    # Count matrix
-    matrix = np.zeros((len(unique_vpn_types), len(unique_app_types)))
-    for i, vpn in enumerate(unique_vpn_types):
-        for j, app in enumerate(unique_app_types):
-            count = sum(1 for v, a in vpn_app_pairs if v == vpn and a == app)
-            matrix[i, j] = count
+    f.write("\n" + "="*60 + "\n")
+    f.write("Data Density Analysis:\n")
+    f.write("="*60 + "\n\n")
     
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    x = np.arange(len(unique_app_types))
-    width = 0.35
-    
-    for i, vpn in enumerate(unique_vpn_types):
-        offset = width * (i - 0.5)
-        bars = ax.bar(x + offset, matrix[i], width, label=vpn, edgecolor='black', linewidth=1.5)
+    for lbl in unique_labels:
+        class_imgs = images[labels == lbl]
+        densities = np.mean(class_imgs > 0, axis=(1, 2)) * 100
         
-        # Add value labels
-        for bar in bars:
-            height = bar.get_height()
-            if height > 0:
-                ax.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{int(height)}',
-                        ha='center', va='bottom', fontsize=8)
-    
-    ax.set_xlabel('Application Type', fontsize=14, fontweight='bold')
-    ax.set_ylabel('Number of Samples', fontsize=14, fontweight='bold')
-    ax.set_title('VPN vs NonVPN Distribution Across Application Types', fontsize=16, fontweight='bold')
-    ax.set_xticks(x)
-    ax.set_xticklabels(unique_app_types, rotation=45, ha='right')
-    ax.legend(fontsize=12)
-    ax.grid(axis='y', alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, "vpn_vs_nonvpn_comparison.png"), dpi=150, bbox_inches='tight')
-    print(f"    Saved: vpn_vs_nonvpn_comparison.png")
-    plt.close()
-
-
-def visualize_heatmap_app_vs_apptype(apps, app_types):
-    """Create heatmap showing relationship between apps and app types"""
-    print("[+] Creating heatmap: App vs App Type...")
-    
-    unique_apps = sorted(set(apps))
-    unique_app_types = sorted(set(app_types))
-    
-    # Create matrix
-    matrix = np.zeros((len(unique_apps), len(unique_app_types)))
-    app_apptype_pairs = list(zip(apps, app_types))
-    
-    for i, app in enumerate(unique_apps):
-        for j, app_type in enumerate(unique_app_types):
-            count = sum(1 for a, at in app_apptype_pairs if a == app and at == app_type)
-            matrix[i, j] = count
-    
-    fig, ax = plt.subplots(figsize=(12, 10))
-    
-    im = ax.imshow(matrix, cmap='YlOrRd', aspect='auto', interpolation='nearest')
-    
-    # Set ticks
-    ax.set_xticks(np.arange(len(unique_app_types)))
-    ax.set_yticks(np.arange(len(unique_apps)))
-    ax.set_xticklabels(unique_app_types, rotation=45, ha='right')
-    ax.set_yticklabels(unique_apps)
-    
-    # Add colorbar
-    cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label('Number of Samples', fontsize=12, fontweight='bold')
-    
-    # Add text annotations
-    for i in range(len(unique_apps)):
-        for j in range(len(unique_app_types)):
-            if matrix[i, j] > 0:
-                text = ax.text(j, i, int(matrix[i, j]),
-                             ha="center", va="center", color="black", fontsize=8, fontweight='bold')
-    
-    ax.set_xlabel('Application Type', fontsize=14, fontweight='bold')
-    ax.set_ylabel('Application Name', fontsize=14, fontweight='bold')
-    ax.set_title('Heatmap: Application vs Application Type', fontsize=16, fontweight='bold')
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, "heatmap_app_vs_apptype.png"), dpi=150, bbox_inches='tight')
-    print(f"    Saved: heatmap_app_vs_apptype.png")
-    plt.close()
-
-
-def visualize_image_patterns_by_app_type(images, app_types):
-    """Show average image patterns for each app type"""
-    print("[+] Visualizing average patterns by app type...")
-    
-    unique_app_types = sorted(set(app_types))
-    
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-    axes = axes.flatten()
-    
-    for idx, app_type in enumerate(unique_app_types):
-        if idx >= len(axes):
-            break
-            
-        # Get all images for this app type
-        mask = app_types == app_type
-        app_images = images[mask]
+        f.write(f"{class_names.get(lbl, 'Unknown')}:\n")
+        f.write(f"  Average density: {np.mean(densities):6.2f}%\n")
+        f.write(f"  Median density:  {np.median(densities):6.2f}%\n")
+        f.write(f"  Min density:     {np.min(densities):6.2f}%\n")
+        f.write(f"  Max density:     {np.max(densities):6.2f}%\n")
+        f.write(f"  Std deviation:   {np.std(densities):6.2f}%\n")
         
-        # Calculate mean image
-        mean_img = np.mean(app_images, axis=0)
+        # Count samples by density ranges
+        sparse = np.sum(densities < 10)
+        medium = np.sum((densities >= 10) & (densities < 50))
+        dense = np.sum(densities >= 50)
         
-        im = axes[idx].imshow(mean_img, cmap='viridis', interpolation='nearest')
-        axes[idx].set_title(f'{app_type}\n(n={len(app_images)})', fontsize=12, fontweight='bold')
-        axes[idx].axis('off')
-        plt.colorbar(im, ax=axes[idx], fraction=0.046, pad=0.04)
-    
-    # Hide unused subplots
-    for idx in range(len(unique_app_types), len(axes)):
-        axes[idx].axis('off')
-    
-    plt.suptitle('Average Image Patterns by Application Type', fontsize=16, fontweight='bold', y=0.98)
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, "average_patterns_by_app_type.png"), dpi=150, bbox_inches='tight')
-    print(f"    Saved: average_patterns_by_app_type.png")
-    plt.close()
+        f.write(f"  Sparse (<10%):   {sparse:6d} ({sparse/len(densities)*100:5.2f}%)\n")
+        f.write(f"  Medium (10-50%): {medium:6d} ({medium/len(densities)*100:5.2f}%)\n")
+        f.write(f"  Dense (>50%):    {dense:6d} ({dense/len(densities)*100:5.2f}%)\n")
+        f.write("\n")
 
+print(f"  Saved: visualization_report.txt")
 
-def visualize_image_patterns_by_app(images, apps):
-    """Show average image patterns for each specific app (top 12)"""
-    print("[+] Visualizing average patterns by specific app...")
-    
-    # Get top apps by count
-    app_counts = Counter(apps)
-    top_apps = [app for app, count in app_counts.most_common(12)]
-    
-    fig, axes = plt.subplots(3, 4, figsize=(16, 12))
-    axes = axes.flatten()
-    
-    for idx, app in enumerate(top_apps):
-        if idx >= len(axes):
-            break
-            
-        # Get all images for this app
-        mask = apps == app
-        app_images = images[mask]
-        
-        # Calculate mean image
-        mean_img = np.mean(app_images, axis=0)
-        
-        im = axes[idx].imshow(mean_img, cmap='viridis', interpolation='nearest')
-        axes[idx].set_title(f'{app}\n(n={len(app_images)})', fontsize=10, fontweight='bold')
-        axes[idx].axis('off')
-        plt.colorbar(im, ax=axes[idx], fraction=0.046, pad=0.04)
-    
-    # Hide unused subplots
-    for idx in range(len(top_apps), len(axes)):
-        axes[idx].axis('off')
-    
-    plt.suptitle('Average Image Patterns by Specific Application (Top 12)', fontsize=16, fontweight='bold', y=0.98)
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, "average_patterns_by_app.png"), dpi=150, bbox_inches='tight')
-    print(f"    Saved: average_patterns_by_app.png")
-    plt.close()
-
-
-def create_summary_report(labels, app_types, apps, vpn_types):
-    """Create a text summary report"""
-    print("[+] Creating summary report...")
-    
-    report_path = os.path.join(OUTPUT_DIR, "detailed_summary_report.txt")
-    
-    with open(report_path, 'w') as f:
-        f.write("=" * 80 + "\n")
-        f.write("DETAILED LABELING SUMMARY REPORT\n")
-        f.write("=" * 80 + "\n\n")
-        
-        f.write(f"Total Samples: {len(labels)}\n\n")
-        
-        f.write("-" * 80 + "\n")
-        f.write("VPN TYPE DISTRIBUTION\n")
-        f.write("-" * 80 + "\n")
-        vpn_counts = Counter(vpn_types)
-        for vpn, count in sorted(vpn_counts.items()):
-            f.write(f"  {vpn}: {count} samples ({count/len(labels)*100:.1f}%)\n")
-        
-        f.write("\n" + "-" * 80 + "\n")
-        f.write("APPLICATION TYPE DISTRIBUTION\n")
-        f.write("-" * 80 + "\n")
-        app_type_counts = Counter(app_types)
-        for app_type, count in sorted(app_type_counts.items(), key=lambda x: x[1], reverse=True):
-            f.write(f"  {app_type}: {count} samples ({count/len(labels)*100:.1f}%)\n")
-        
-        f.write("\n" + "-" * 80 + "\n")
-        f.write("SPECIFIC APPLICATION DISTRIBUTION\n")
-        f.write("-" * 80 + "\n")
-        app_counts = Counter(apps)
-        for app, count in sorted(app_counts.items(), key=lambda x: x[1], reverse=True):
-            f.write(f"  {app}: {count} samples ({count/len(labels)*100:.1f}%)\n")
-        
-        f.write("\n" + "-" * 80 + "\n")
-        f.write("DETAILED LABELS (showing all unique combinations)\n")
-        f.write("-" * 80 + "\n")
-        label_counts = Counter(labels)
-        for label, count in sorted(label_counts.items()):
-            f.write(f"  {label}: {count} samples\n")
-        
-        f.write("\n" + "=" * 80 + "\n")
-    
-    print(f"    Saved: detailed_summary_report.txt")
-
-
-def main():
-    """Run all visualizations"""
-    print("\n" + "=" * 80)
-    print("DETAILED LABEL VISUALIZATION")
-    print("=" * 80 + "\n")
-    
-    # Load data
-    images, labels, app_types, apps, vpn_types = load_detailed_data()
-    
-    # Create all visualizations
-    visualize_sample_images_grid(images, labels)  # New grid-style visualization
-    visualize_distribution_by_app_type(app_types)
-    visualize_distribution_by_app(apps)
-    visualize_vpn_comparison(vpn_types, app_types)
-    visualize_heatmap_app_vs_apptype(apps, app_types)
-    visualize_image_patterns_by_app_type(images, app_types)
-    visualize_image_patterns_by_app(images, apps)
-    create_summary_report(labels, app_types, apps, vpn_types)
-    
-    print("\n" + "=" * 80)
-    print(f"[✓] All visualizations saved to: {OUTPUT_DIR}")
-    print("=" * 80 + "\n")
-
-
-if __name__ == "__main__":
-    main()
-
+print("\n" + "="*60)
+print("VISUALIZATION COMPLETE!")
+print("="*60)
+print(f"All visualizations saved to: {OUTPUT_DIR}")
+print("\nGenerated files:")
+print("  1. comprehensive_grid_50_per_class.png - First 50 samples per class")
+print("  2. rich_samples_only.png - Only samples with >10% data density")
+print("  3. random_samples_30_per_class.png - 30 random samples per class")
+print("  4. density_distributions.png - Histogram of data densities")
+print("  5. visualization_report.txt - Detailed statistics")

@@ -1,5 +1,6 @@
 import os
 import shutil
+import gc
 from scapy.all import IP, TCP, UDP, PcapReader
 from collections import defaultdict
 import numpy as np
@@ -23,7 +24,15 @@ os.makedirs(IDX_DIR, exist_ok=True)
 # ================================
 def process_pcap_to_images(pcap_path, label, seen_hashes, max_flows=None):
     """
-    Process a PCAP file directly into images without writing intermediate flow files.
+    Process a PCAP file directly into images with streaming/incremental processing.
+    Converts flows to images as soon as they reach 784 bytes to minimize memory usage.
+    
+    Key optimizations:
+    1. Processes and frees flows immediately when they reach 784 bytes
+    2. Marks processed flows to ignore later packets from same flow
+    3. Guarantees one image per flow (identical to original 2-step approach)
+    
+    This prevents memory buildup from large PCAPs while maintaining data integrity.
     
     Args:
         pcap_path: Path to the PCAP file
@@ -34,13 +43,20 @@ def process_pcap_to_images(pcap_path, label, seen_hashes, max_flows=None):
     Returns:
         List of (image, label) tuples for valid, unique flows
     """
-    flows = defaultdict(list)
+    flows = defaultdict(list)  # Stores packets temporarily
+    flow_byte_counts = defaultdict(int)  # Track byte count per flow
+    processed_flows = set()  # Track which flows have been processed
     results = []
+    flow_count = 0
+    seen_seq_nums = set()
     
-    # Step 1: Split into flows (in memory)
     try:
         with PcapReader(pcap_path) as packets:
             for pkt in packets:
+                # Check if we've reached max flows
+                if max_flows and flow_count >= max_flows:
+                    break
+                
                 if IP in pkt and (TCP in pkt or UDP in pkt):
                     ip = pkt[IP]
                     proto = ip.proto
@@ -49,14 +65,45 @@ def process_pcap_to_images(pcap_path, label, seen_hashes, max_flows=None):
                     dport = getattr(pkt, 'dport', 0)
                     sorted_ports = tuple(sorted((sport, dport)))
                     key = (sorted_ips[0], sorted_ips[1], sorted_ports[0], sorted_ports[1], proto)
+                    
+                    # Skip if flow already processed (prevents duplicate images from same flow)
+                    if key in processed_flows:
+                        continue
+                    
+                    # Skip if we've reached max flows and this is a new flow
+                    if key not in flows and max_flows and flow_count >= max_flows:
+                        continue
+                    
                     flows[key].append(pkt)
+                    flow_byte_counts[key] += len(bytes(pkt))
+                    
+                    # Process flow immediately when it has enough bytes (784)
+                    # This prevents memory buildup while not artificially splitting flows
+                    if flow_byte_counts[key] >= MAX_LEN:
+                        
+                        img = extract_flow_image(flows[key])
+                        
+                        if img is not None:
+                            # Deduplication using hash
+                            digest = hashlib.sha1(img.tobytes()).hexdigest()
+                            if digest not in seen_hashes:
+                                seen_hashes.add(digest)
+                                results.append((img, label))
+                                flow_count += 1
+                        
+                        # Mark flow as processed and free memory
+                        processed_flows.add(key)
+                        del flows[key]
+                        del flow_byte_counts[key]
+                        
     except Exception as e:
         print(f"[!] Could not read or process {pcap_path}: {e}")
+        flows.clear()
+        flow_byte_counts.clear()
         return results
     
-    # Step 2: Process each flow into an image
-    flow_count = 0
-    for flow_packets in flows.values():
+    # Process any remaining flows that didn't reach the threshold
+    for key, flow_packets in list(flows.items()):
         if max_flows and flow_count >= max_flows:
             break
             
@@ -78,6 +125,7 @@ def process_pcap_to_images(pcap_path, label, seen_hashes, max_flows=None):
     
     # Clear flows from memory
     flows.clear()
+    flow_byte_counts.clear()
     
     return results
 
@@ -185,7 +233,7 @@ def process_all_pcaps(max_files_per_category=None, max_flows_per_file=None):
 
     seen_hashes = set()
     batch_images, batch_labels = [], []
-    batch_size = 1000  # Save every 1000 samples to prevent memory overflow
+    batch_size = 500  # Save every 500 samples (more frequent to reduce memory)
     batch_count = 0
     total_samples = 0
     
@@ -194,7 +242,7 @@ def process_all_pcaps(max_files_per_category=None, max_flows_per_file=None):
     if max_flows_per_file:
         print(f"[TEST MODE] Processing max {max_flows_per_file} flows per file")
 
-    for vpn_type in ["VPN", "NonVPN"]:
+    for vpn_type in ["NonVPN", "VPN"]:
         for category in label_map[vpn_type]:
             category_dir = os.path.join(RAW_DIR, vpn_type, category)
             if not os.path.isdir(category_dir):
@@ -226,6 +274,10 @@ def process_all_pcaps(max_files_per_category=None, max_flows_per_file=None):
                         batch_count += 1
                         batch_images.clear()
                         batch_labels.clear()
+                        gc.collect()  # Aggressive memory cleanup after batch save
+                
+                # Force garbage collection after each file to free memory
+                gc.collect()
 
     # Save any remaining samples
     if len(batch_images) > 0:
@@ -267,8 +319,8 @@ def _merge_batches(num_batches):
     final_labels = np.concatenate(all_labels, axis=0)
     
     # Save final files
-    np.save(os.path.join(IDX_DIR, "data_without_mem.npy"), final_images)
-    np.save(os.path.join(IDX_DIR, "labels_without_mem.npy"), final_labels)
+    np.save(os.path.join(IDX_DIR, "data.npy"), final_images)
+    np.save(os.path.join(IDX_DIR, "labels.npy"), final_labels)
     
     # Clean up batch files
     shutil.rmtree(batch_dir)

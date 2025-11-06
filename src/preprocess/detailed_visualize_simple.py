@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
-IMAGE_DIR = os.path.join(PROJECT_ROOT, "processed_test/idx/new_data_images.npy")
-LABELS_DIR = os.path.join(PROJECT_ROOT, "processed_test/idx/data_labels_detailed.npy")
+IMAGE_DIR = os.path.join(PROJECT_ROOT, "processed_data/idx/data.npy")
+LABELS_DIR = os.path.join(PROJECT_ROOT, "processed_data/idx/labels.npy")
 
 # Load processed data
 images = np.load(IMAGE_DIR)   # shape (N, 28, 28)

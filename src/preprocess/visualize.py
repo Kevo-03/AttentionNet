@@ -6,8 +6,8 @@ import random
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
-IMAGE_DIR = os.path.join(PROJECT_ROOT,"processed_data/idx/data.npy")
-LABELS_DIR = os.path.join(PROJECT_ROOT,"processed_data/idx/labels.npy")
+IMAGE_DIR = os.path.join(PROJECT_ROOT,"processed_data/final/train_data.npy")
+LABELS_DIR = os.path.join(PROJECT_ROOT,"processed_data/finalso/train_labels.npy")
 
 images = np.load(IMAGE_DIR)   # shape (N, 28, 28)
 labels = np.load(LABELS_DIR) # shape (N,)
