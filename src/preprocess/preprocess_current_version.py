@@ -267,8 +267,8 @@ def _merge_batches(num_batches):
     final_labels = np.concatenate(all_labels, axis=0)
     
     # Save final files
-    np.save(os.path.join(IDX_DIR, "data_without_mem.npy"), final_images)
-    np.save(os.path.join(IDX_DIR, "labels_without_mem.npy"), final_labels)
+    np.save(os.path.join(IDX_DIR, "data_fixed.npy"), final_images)
+    np.save(os.path.join(IDX_DIR, "labels_fixed.npy"), final_labels)
     
     # Clean up batch files
     shutil.rmtree(batch_dir)
@@ -290,8 +290,8 @@ def visualize_samples(samples_per_label=16):
         print("[!] matplotlib not installed. Run: pip install matplotlib")
         return
     
-    data_file = os.path.join(IDX_DIR, "data.npy")
-    labels_file = os.path.join(IDX_DIR, "labels.npy")
+    data_file = os.path.join(IDX_DIR, "data_fixed.npy")
+    labels_file = os.path.join(IDX_DIR, "labels_fixed.npy")
     
     if not os.path.exists(data_file) or not os.path.exists(labels_file):
         print("[!] No processed data found. Run processing first.")
@@ -376,3 +376,7 @@ if __name__ == "__main__":
     else:
         # Production mode: process all data
         process_all_pcaps()
+        print("\n" + "="*60)
+        print("Visualizing results...")
+        print("="*60 + "\n")
+        visualize_samples()

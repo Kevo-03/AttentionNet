@@ -126,16 +126,16 @@ class TrafficCNN(nn.Module):
 print("\n[1/5] Loading datasets...")
 
 train_dataset = TrafficDataset(
-    os.path.join(DATA_DIR, "train_data.npy"),
-    os.path.join(DATA_DIR, "train_labels.npy")
+    os.path.join(DATA_DIR, "train_data_fixed.npy"),
+    os.path.join(DATA_DIR, "train_labels_fixed.npy")
 )
 val_dataset = TrafficDataset(
-    os.path.join(DATA_DIR, "val_data.npy"),
-    os.path.join(DATA_DIR, "val_labels.npy")
+    os.path.join(DATA_DIR, "val_data_fixed.npy"),
+    os.path.join(DATA_DIR, "val_labels_fixed.npy")
 )
 test_dataset = TrafficDataset(
-    os.path.join(DATA_DIR, "test_data.npy"),
-    os.path.join(DATA_DIR, "test_labels.npy")
+    os.path.join(DATA_DIR, "test_data_fixed.npy"),
+    os.path.join(DATA_DIR, "test_labels_fixed.npy")
 )
 
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
