@@ -18,9 +18,9 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Parameters
-MIN_DENSITY = 0.08  # Keep flows with at least 8% non-zero pixels
+MIN_DENSITY = 0.05  # Keep flows with at least 8% non-zero pixels
 MIN_SAMPLES_PER_CLASS = 0  # Drop classes with fewer samples
-TARGET_BALANCE = 2500  # Target samples per class (balance training set)
+TARGET_BALANCE = 3500  # Target samples per class (balance training set)
 TRAIN_RATIO = 0.7
 VAL_RATIO = 0.15
 TEST_RATIO = 0.15
@@ -163,7 +163,7 @@ def augment_image(img):
 train_counter = Counter(y_train)
 class_sizes = sorted(train_counter.values())
 median_size = class_sizes[len(class_sizes)//2]
-aug_target = min(median_size + 500, 2000)  # Don't oversample too much
+aug_target = min(median_size + 500, 3500)  # Don't oversample too much
 
 print(f"  Augmentation target: {aug_target} samples per minority class")
 

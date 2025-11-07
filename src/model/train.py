@@ -70,39 +70,49 @@ class TrafficCNN(nn.Module):
     def __init__(self, num_classes=11):
         super(TrafficCNN, self).__init__()
         
-        # Convolutional layers
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(64)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.bn3 = nn.BatchNorm2d(128)
+        # First layer: Wide 1D-style kernel to capture byte sequences
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=(1, 25), padding=(0, 12))  # (1,25) like TransecaNet
+        self.bn1 = nn.BatchNorm2d(64)
         
-        self.pool = nn.MaxPool2d(2, 2)
+        # Second layer: Moderate width to capture patterns across sequences
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=(1, 15), padding=(0, 7))
+        self.bn2 = nn.BatchNorm2d(128)
+        
+        # Third layer: Can use 2D now for combining features
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=(3, 3), padding=1)
+        self.bn3 = nn.BatchNorm2d(256)
+        
+        # Pooling only in width dimension initially
+        self.pool_width = nn.MaxPool2d((1, 2))  # Pool width only
+        self.pool_2d = nn.MaxPool2d((2, 2))     # Standard 2D pooling
+        
         self.dropout = nn.Dropout(0.5)
         
-        # After 3 pooling layers: 28x28 -> 14x14 -> 7x7 -> 3x3
-        # 128 channels * 3 * 3 = 1152
-        self.fc1 = nn.Linear(128 * 3 * 3, 256)
-        self.fc2 = nn.Linear(256, 128)
-        self.fc3 = nn.Linear(128, num_classes)
+        # After: 
+        # conv1 + pool_width: 28×14
+        # conv2 + pool_width: 28×7
+        # conv3 + pool_2d: 14×3
+        self.fc1 = nn.Linear(256 * 14 * 3, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256, num_classes)
         
         self.relu = nn.ReLU()
         
     def forward(self, x):
-        # Conv block 1
-        x = self.pool(self.relu(self.bn1(self.conv1(x))))
+        # Conv block 1: 1D-style horizontal scanning
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.pool_width(x)  # Pool only width
         
-        # Conv block 2
-        x = self.pool(self.relu(self.bn2(self.conv2(x))))
+        # Conv block 2: Still 1D-style
+        x = self.relu(self.bn2(self.conv2(x)))
+        x = self.pool_width(x)  # Pool only width
         
-        # Conv block 3
-        x = self.pool(self.relu(self.bn3(self.conv3(x))))
+        # Conv block 3: Now 2D to combine features
+        x = self.relu(self.bn3(self.conv3(x)))
+        x = self.pool_2d(x)  # Standard 2D pooling
         
-        # Flatten
+        # Flatten and FC
         x = x.view(x.size(0), -1)
-        
-        # Fully connected layers
         x = self.relu(self.fc1(x))
         x = self.dropout(x)
         x = self.relu(self.fc2(x))
@@ -110,7 +120,6 @@ class TrafficCNN(nn.Module):
         x = self.fc3(x)
         
         return x
-
 # ============================================================================
 # LOAD DATA
 # ============================================================================
