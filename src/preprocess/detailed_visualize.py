@@ -6,8 +6,8 @@ from matplotlib.gridspec import GridSpec
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
-IMAGE_DIR = os.path.join(PROJECT_ROOT, "processed_data/idx/data_fixed.npy")
-LABELS_DIR = os.path.join(PROJECT_ROOT, "processed_data/idx/labels_fixed.npy")
+IMAGE_DIR = os.path.join(PROJECT_ROOT, "processed_data/balanced/test_data_weighted.npy")
+LABELS_DIR = os.path.join(PROJECT_ROOT, "processed_data/balanced/test_labels_weighted.npy")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/visualizations")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)

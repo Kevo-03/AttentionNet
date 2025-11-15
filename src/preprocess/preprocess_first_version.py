@@ -162,7 +162,7 @@ def run_step2_extract_and_clean():
     all_images, all_labels = [], []
     seen_hashes = set()
 
-    for vpn_type in ["VPN", "NonVPN"]:
+    for vpn_type in ["NonVPN", "VPN"]:
         for category in label_map[vpn_type]:
             input_dir = os.path.join(FLOW_DIR, vpn_type, category)
             if not os.path.isdir(input_dir):
@@ -193,9 +193,112 @@ def run_step2_extract_and_clean():
     print(f"[+] Cleaned dataset saved. Total samples: {len(all_images)}")
 
 
+def visualize_samples(samples_per_label=16):
+    """
+    Visualize sample images from the processed dataset to verify output.
+    Creates a separate 4x4 grid for each label.
+    
+    Args:
+        samples_per_label: Number of samples to show per label (default: 16 for 4x4 grid)
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("[!] matplotlib not installed. Run: pip install matplotlib")
+        return
+    
+    data_file = os.path.join(IDX_DIR, "data.npy")
+    labels_file = os.path.join(IDX_DIR, "labels.npy")
+    
+    if not os.path.exists(data_file) or not os.path.exists(labels_file):
+        print("[!] No processed data found. Run processing first.")
+        return
+    
+    images = np.load(data_file)
+    labels = np.load(labels_file)
+    
+    label_names = {
+        0: "NonVPN-Chat", 1: "NonVPN-Email", 2: "NonVPN-File", 
+        3: "NonVPN-Streaming", 4: "NonVPN-VoIP",
+        5: "VPN-Chat", 6: "VPN-Email", 7: "VPN-File", 
+        8: "VPN-P2P", 9: "VPN-Streaming", 10: "VPN-VoIP"
+    }
+    
+    print(f"\n[+] Dataset Statistics:")
+    print(f"    Total images: {len(images)}")
+    print(f"    Image shape: {images[0].shape}")
+    print(f"    Label distribution:")
+    unique_labels, counts = np.unique(labels, return_counts=True)
+    for lbl, count in zip(unique_labels, counts):
+        print(f"      {label_names.get(lbl, f'Unknown-{lbl}')}: {count} samples")
+    
+    # Create visualization for each label
+    rows = 4
+    cols = 4
+    
+    for label_idx in unique_labels:
+        # Get all images for this label
+        label_mask = labels == label_idx
+        label_images = images[label_mask]
+        
+        if len(label_images) == 0:
+            continue
+        
+        print(f"\n[+] Generating visualization for {label_names.get(label_idx, f'Unknown-{label_idx}')}...")
+        
+        # Take up to samples_per_label images
+        num_to_show = min(samples_per_label, len(label_images))
+        
+        fig, axes = plt.subplots(rows, cols, figsize=(12, 12))
+        axes = axes.flatten()
+        
+        for idx in range(rows * cols):
+            if idx < num_to_show:
+                axes[idx].imshow(label_images[idx], cmap='gray')
+                axes[idx].set_title(f"Sample {idx}", fontsize=8)
+                axes[idx].axis('off')
+            else:
+                axes[idx].axis('off')
+        
+        # Add super title for the whole figure
+        fig.suptitle(f"{label_names.get(label_idx, f'Unknown-{label_idx}')} - Label {label_idx}", 
+                     fontsize=16, fontweight='bold')
+        plt.tight_layout()
+        
+        # Save with label-specific filename
+        viz_path = os.path.join(IDX_DIR, f"visualization_label_{label_idx}_{label_names.get(label_idx, 'Unknown').replace('-', '_')}.png")
+        plt.savefig(viz_path, dpi=150, bbox_inches='tight')
+        print(f"    Saved: {viz_path}")
+        plt.close()  # Close to free memory
+    
+    print(f"\n[+] All visualizations saved to: {IDX_DIR}")
+
+
 # ======================================================
 # Run Steps
 # ======================================================
 if __name__ == "__main__":
-    run_step1_split_all()
-    run_step2_extract_and_clean()
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "visualize":
+        # Only run visualization on existing data
+        print("\n" + "="*60)
+        print("Visualizing existing data...")
+        print("="*60 + "\n")
+        visualize_samples()
+    else:
+        # Run full processing pipeline
+        print("\n" + "="*60)
+        print("Step 1: Splitting PCAPs into flows...")
+        print("="*60 + "\n")
+        run_step1_split_all()
+        
+        print("\n" + "="*60)
+        print("Step 2: Extracting images from flows...")
+        print("="*60 + "\n")
+        run_step2_extract_and_clean()
+        
+        print("\n" + "="*60)
+        print("Visualizing results...")
+        print("="*60 + "\n")
+        visualize_samples()
