@@ -47,22 +47,62 @@ print("="*80)
 # DATASET CLASS
 # ============================================================================
 class TrafficDataset(Dataset):
-    def __init__(self, data_path, labels_path):
+    def __init__(self, data_path, labels_path, augment=False):
         self.data = np.load(data_path)
         self.labels = np.load(labels_path)
-        
+        self.augment = augment
+
     def __len__(self):
         return len(self.data)
-    
-    def __getitem__(self, idx):
-        # Normalize to [0, 1]
-        image = self.data[idx].astype(np.float32) / 255.0
-        # Add channel dimension (1, 28, 28)
-        image = np.expand_dims(image, axis=0)
-        label = self.labels[idx]
-        
-        return torch.from_numpy(image), torch.tensor(label, dtype=torch.long)
 
+    def _augment_image(self, img: np.ndarray) -> np.ndarray:
+        """
+        On-the-fly augmentation tailored for traffic flow images.
+        img: (28, 28), uint8
+        """
+        aug = img.astype(np.float32)
+
+        # 1) small Gaussian noise (70% of the time)
+        if np.random.rand() < 0.7:
+            noise = np.random.normal(0.0, 3.0, aug.shape)
+            aug = np.clip(aug + noise, 0, 255)
+
+        # 2) tiny random erasing (30% of the time)
+        if np.random.rand() < 0.3:
+            h, w = aug.shape
+            eh = np.random.randint(2, 4)
+            ew = np.random.randint(4, 8)
+            y = np.random.randint(0, h - eh)
+            x = np.random.randint(0, w - ew)
+            aug[y:y+eh, x:x+ew] = 0.0
+
+        # 3) small horizontal shift (30% of the time)
+        if np.random.rand() < 0.3:
+            shift = np.random.randint(-2, 3)  # -2..2
+            aug = np.roll(aug, shift, axis=1)
+            # zero-fill wrapped area
+            if shift > 0:
+                aug[:, :shift] = 0.0
+            elif shift < 0:
+                aug[:, shift:] = 0.0
+
+        return aug.astype(np.float32)
+
+    def __getitem__(self, idx):
+        img = self.data[idx]
+        label = self.labels[idx]
+
+        if self.augment:
+            img = self._augment_image(img)
+        else:
+            img = img.astype(np.float32)
+
+        # normalize to [0, 1]
+        img = img / 255.0
+        # add channel dim -> (1, 28, 28)
+        img = np.expand_dims(img, axis=0)
+
+        return torch.from_numpy(img), torch.tensor(label, dtype=torch.long)
 # ============================================================================
 # CNN MODEL
 # ============================================================================
@@ -127,15 +167,18 @@ print("\n[1/5] Loading datasets...")
 
 train_dataset = TrafficDataset(
     os.path.join(DATA_DIR, "train_data_fixed.npy"),
-    os.path.join(DATA_DIR, "train_labels_fixed.npy")
+    os.path.join(DATA_DIR, "train_labels_fixed.npy"),
+    augment=True,          # <-- turn on for training
 )
 val_dataset = TrafficDataset(
     os.path.join(DATA_DIR, "val_data_fixed.npy"),
-    os.path.join(DATA_DIR, "val_labels_fixed.npy")
+    os.path.join(DATA_DIR, "val_labels_fixed.npy"),
+    augment=False,
 )
 test_dataset = TrafficDataset(
     os.path.join(DATA_DIR, "test_data_fixed.npy"),
-    os.path.join(DATA_DIR, "test_labels_fixed.npy")
+    os.path.join(DATA_DIR, "test_labels_fixed.npy"),
+    augment=False,
 )
 
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
@@ -152,8 +195,14 @@ print(f"  Test:  {len(test_dataset)} samples")
 print("\n[2/5] Initializing model...")
 
 model = TrafficCNN(num_classes=11).to(DEVICE)
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer,
+    mode='max',
+    factor=0.5,
+    patience=3
+)
 
 # Count parameters
 total_params = sum(p.numel() for p in model.parameters())
@@ -221,26 +270,43 @@ history = {
 best_val_acc = 0.0
 best_model_path = os.path.join(OUTPUT_DIR, "best_model.pth")
 
+early_stop_patience = 8
+no_improve_epochs = 0
+
 for epoch in range(NUM_EPOCHS):
     print(f"\nEpoch {epoch+1}/{NUM_EPOCHS}")
     print("-" * 40)
-    
+
     train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, DEVICE)
     val_loss, val_acc = validate(model, val_loader, criterion, DEVICE)
-    
+
     history['train_loss'].append(train_loss)
     history['train_acc'].append(train_acc)
     history['val_loss'].append(val_loss)
     history['val_acc'].append(val_acc)
-    
+
     print(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
-    print(f"Val Loss:   {val_loss:.4f} | Val Acc:   {val_acc:.2f}%")
-    
-    # Save best model
+    print(f"Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.2f}%")
+    old_lr = optimizer.param_groups[0]['lr']
+
+    scheduler.step(val_acc)
+
+    new_lr = optimizer.param_groups[0]['lr']
+    if new_lr != old_lr:
+        print(f"✓ Learning rate reduced: {old_lr:.6f} → {new_lr:.6f}")
+
     if val_acc > best_val_acc:
         best_val_acc = val_acc
         torch.save(model.state_dict(), best_model_path)
         print(f"✓ Saved best model (Val Acc: {val_acc:.2f}%)")
+        no_improve_epochs = 0
+    else:
+        no_improve_epochs += 1
+        print(f"No improvement for {no_improve_epochs} epoch(s)")
+
+    if no_improve_epochs >= early_stop_patience:
+        print(f"\nEarly stopping triggered after {epoch+1} epochs.")
+        break
 
 # ============================================================================
 # EVALUATION ON TEST SET
