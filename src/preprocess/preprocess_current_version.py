@@ -179,8 +179,8 @@ def process_all_pcaps(max_files_per_category=None, max_flows_per_file=None):
         max_flows_per_file: Limit number of flows per PCAP file (None = all)
     """
     label_map = {
-        "NonVPN": {"Chat": 0, "Email": 1, "File": 2, "Streaming": 3, "VoIP": 4},
-        "VPN":    {"Chat": 5, "Email": 6, "File": 7, "P2P": 8, "Streaming": 9, "VoIP": 10}
+        "NonVPN": {"Chat": 0, "Email": 1, "File": 2, "Streaming": 3, "VoIP": 4, "P2P": 5},
+        "VPN":    {"Chat": 6, "Email": 7, "File": 8, "P2P": 9, "Streaming": 10, "VoIP": 11}
     }
 
     seen_hashes = set()
@@ -302,9 +302,9 @@ def visualize_samples(samples_per_label=16):
     
     label_names = {
         0: "NonVPN-Chat", 1: "NonVPN-Email", 2: "NonVPN-File", 
-        3: "NonVPN-Streaming", 4: "NonVPN-VoIP",
-        5: "VPN-Chat", 6: "VPN-Email", 7: "VPN-File", 
-        8: "VPN-P2P", 9: "VPN-Streaming", 10: "VPN-VoIP"
+        3: "NonVPN-Streaming", 4: "NonVPN-VoIP", 5: "NonVPN-P2P",
+        6: "VPN-Chat", 7: "VPN-Email", 8: "VPN-File", 
+        9: "VPN-P2P", 10: "VPN-Streaming", 11: "VPN-VoIP"
     }
     
     print(f"\n[+] Dataset Statistics:")
