@@ -6,9 +6,9 @@ from matplotlib.gridspec import GridSpec
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
-IMAGE_DIR = os.path.join(PROJECT_ROOT, "processed_data/balanced/test_data_weighted.npy")
-LABELS_DIR = os.path.join(PROJECT_ROOT, "processed_data/balanced/test_labels_weighted.npy")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/visualizations")
+IMAGE_DIR = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p/data_memory_safe_own_nonVPN_p2p.npy")
+LABELS_DIR = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p/labels_memory_safe_own_nonVPN_p2p.npy")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p/visualization")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -18,17 +18,18 @@ images = np.load(IMAGE_DIR)   # shape (N, 28, 28)
 labels = np.load(LABELS_DIR)  # shape (N,)
 
 class_names = {
-    0: "Chat (NonVPN)",
-    1: "Email (NonVPN)",
-    2: "File (NonVPN)",
-    3: "Streaming (NonVPN)",
-    4: "VoIP (NonVPN)",
-    5: "Chat (VPN)",
-    6: "Email (VPN)",
-    7: "File (VPN)",
-    8: "P2P (VPN)",
-    9: "Streaming (VPN)",
-    10: "VoIP (VPN)",
+    0: "NonVPN-Chat",
+    1: "NonVPN-Email",
+    2: "NonVPN-File",
+    3: "NonVPN-P2P",
+    4: "NonVPN-Streaming",
+    5: "NonVPN-VoIP",
+    6: "VPN-Chat",
+    7: "VPN-Email",
+    8: "VPN-File",
+    9: "VPN-P2P",
+    10: "VPN-Streaming",
+    11: "VPN-VoIP",
 }
 
 # =====================================

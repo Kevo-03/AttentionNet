@@ -17,8 +17,8 @@ script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
-DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output")
+DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/2_layer_model")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
@@ -29,10 +29,12 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 CLASS_NAMES = {
     0: "Chat (NonVPN)", 1: "Email (NonVPN)", 2: "File (NonVPN)", 
-    3: "Streaming (NonVPN)", 4: "VoIP (NonVPN)",
-    5: "Chat (VPN)", 6: "Email (VPN)", 7: "File (VPN)", 
-    8: "P2P (VPN)", 9: "Streaming (VPN)", 10: "VoIP (VPN)"
+    3: "P2P (NonVPN)",4: "Streaming (NonVPN)", 5: "VoIP (NonVPN)", 
+    6: "Chat (VPN)", 7: "Email (VPN)", 8: "File (VPN)", 
+    9: "P2P (VPN)",10: "Streaming (VPN)", 11: "VoIP (VPN)"
 }
+
+N_CLASSES = len(CLASS_NAMES)  # 12
 
 print("="*80)
 print("NETWORK TRAFFIC CLASSIFICATION - CNN TRAINING")
@@ -107,58 +109,60 @@ class TrafficDataset(Dataset):
 # CNN MODEL
 # ============================================================================
 class TrafficCNN(nn.Module):
-    def __init__(self, num_classes=11):
+    def __init__(self, num_classes=12):
         super(TrafficCNN, self).__init__()
         
-        # First layer: Wide 1D-style kernel to capture byte sequences
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=(1, 25), padding=(0, 12))  # (1,25) like TransecaNet
+        self.conv1 = nn.Conv2d(
+            in_channels=1,
+            out_channels=64,
+            kernel_size=3,
+            padding=1  # keeps 28x28
+        )
         self.bn1 = nn.BatchNorm2d(64)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)  # 28x28 -> 14x14
         
-        # Second layer: Moderate width to capture patterns across sequences
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=(1, 15), padding=(0, 7))
+        self.conv2 = nn.Conv2d(
+            in_channels=64,
+            out_channels=128,
+            kernel_size=3,
+            padding=1  # keeps 14x14
+        )
         self.bn2 = nn.BatchNorm2d(128)
-        
-        # Third layer: Can use 2D now for combining features
-        self.conv3 = nn.Conv2d(128, 256, kernel_size=(3, 3), padding=1)
-        self.bn3 = nn.BatchNorm2d(256)
-        
-        # Pooling only in width dimension initially
-        self.pool_width = nn.MaxPool2d((1, 2))  # Pool width only
-        self.pool_2d = nn.MaxPool2d((2, 2))     # Standard 2D pooling
-        
-        self.dropout = nn.Dropout(0.5)
-        
-        # After: 
-        # conv1 + pool_width: 28×14
-        # conv2 + pool_width: 28×7
-        # conv3 + pool_2d: 14×3
-        self.fc1 = nn.Linear(256 * 14 * 3, 512)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)  # 14x14 -> 7x7
+
+        # After conv + pooling:
+        # input:  (B, 1, 28, 28)
+        # conv1:  (B, 64, 28, 28)
+        # pool1:  (B, 64, 14, 14)
+        # conv2:  (B, 128, 14, 14)
+        # pool2:  (B, 128, 7, 7)
+        # Flatten size = 128 * 7 * 7 = 6272
+        self.fc1 = nn.Linear(128 * 7 * 7, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, num_classes)
-        
+
         self.relu = nn.ReLU()
-        
+        self.dropout = nn.Dropout(0.5)
+
     def forward(self, x):
-        # Conv block 1: 1D-style horizontal scanning
-        x = self.relu(self.bn1(self.conv1(x)))
-        x = self.pool_width(x)  # Pool only width
+        # x: (B, 1, 28, 28)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.pool1(x)   # (B, 64, 14, 14)
         
-        # Conv block 2: Still 1D-style
-        x = self.relu(self.bn2(self.conv2(x)))
-        x = self.pool_width(x)  # Pool only width
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        x = self.pool2(x)   # (B, 128, 7, 7)
+
+        x = x.view(x.size(0), -1)  # flatten
         
-        # Conv block 3: Now 2D to combine features
-        x = self.relu(self.bn3(self.conv3(x)))
-        x = self.pool_2d(x)  # Standard 2D pooling
-        
-        # Flatten and FC
-        x = x.view(x.size(0), -1)
         x = self.relu(self.fc1(x))
         x = self.dropout(x)
         x = self.relu(self.fc2(x))
         x = self.dropout(x)
         x = self.fc3(x)
-        
         return x
 # ============================================================================
 # LOAD DATA
@@ -166,18 +170,18 @@ class TrafficCNN(nn.Module):
 print("\n[1/5] Loading datasets...")
 
 train_dataset = TrafficDataset(
-    os.path.join(DATA_DIR, "train_data_fixed.npy"),
-    os.path.join(DATA_DIR, "train_labels_fixed.npy"),
+    os.path.join(DATA_DIR, "train_data_memory_safe_own_nonVPN_p2p.npy"),
+    os.path.join(DATA_DIR, "train_labels_memory_safe_own_nonVPN_p2p.npy"),
     augment=True,          # <-- turn on for training
 )
 val_dataset = TrafficDataset(
-    os.path.join(DATA_DIR, "val_data_fixed.npy"),
-    os.path.join(DATA_DIR, "val_labels_fixed.npy"),
+    os.path.join(DATA_DIR, "val_data_memory_safe_own_nonVPN_p2p.npy"),
+    os.path.join(DATA_DIR, "val_labels_memory_safe_own_nonVPN_p2p.npy"),
     augment=False,
 )
 test_dataset = TrafficDataset(
-    os.path.join(DATA_DIR, "test_data_fixed.npy"),
-    os.path.join(DATA_DIR, "test_labels_fixed.npy"),
+    os.path.join(DATA_DIR, "test_data_memory_safe_own_nonVPN_p2p.npy"),
+    os.path.join(DATA_DIR, "test_labels_memory_safe_own_nonVPN_p2p.npy"),
     augment=False,
 )
 
@@ -194,7 +198,7 @@ print(f"  Test:  {len(test_dataset)} samples")
 # ============================================================================
 print("\n[2/5] Initializing model...")
 
-model = TrafficCNN(num_classes=11).to(DEVICE)
+model = TrafficCNN(num_classes=N_CLASSES).to(DEVICE)
 criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -336,9 +340,11 @@ print(f"\n  Test Accuracy: {test_acc:.2f}%")
 # Classification report
 print("\n  Classification Report:")
 print("-" * 80)
-report = classification_report(all_labels, all_preds, 
-                               target_names=[CLASS_NAMES[i] for i in range(11)],
-                               digits=3)
+report = classification_report(
+    all_labels, all_preds,
+    target_names=[CLASS_NAMES[i] for i in range(N_CLASSES)],
+    digits=3
+)
 print(report)
 
 # Save report
@@ -378,8 +384,14 @@ plt.close()
 # 2. Confusion matrix
 cm = confusion_matrix(all_labels, all_preds)
 plt.figure(figsize=(12, 10))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-            xticklabels=range(11), yticklabels=range(11))
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt='d',
+    cmap='Blues',
+    xticklabels=range(N_CLASSES),
+    yticklabels=range(N_CLASSES)
+)
 plt.xlabel('Predicted Label', fontsize=12, fontweight='bold')
 plt.ylabel('True Label', fontsize=12, fontweight='bold')
 plt.title(f'Confusion Matrix (Test Accuracy: {test_acc:.2f}%)', 
@@ -392,7 +404,7 @@ plt.close()
 # 3. Per-class accuracy
 from sklearn.metrics import accuracy_score
 class_accuracies = []
-for i in range(11):
+for i in range(N_CLASSES):
     mask = np.array(all_labels) == i
     if mask.sum() > 0:
         class_acc = accuracy_score(np.array(all_labels)[mask], np.array(all_preds)[mask]) * 100
@@ -401,11 +413,11 @@ for i in range(11):
         class_accuracies.append(0)
 
 plt.figure(figsize=(14, 6))
-bars = plt.bar(range(11), class_accuracies, color='steelblue', edgecolor='black')
+bars = plt.bar(range(N_CLASSES), class_accuracies, color='steelblue', edgecolor='black')
 plt.xlabel('Class Label', fontsize=12, fontweight='bold')
 plt.ylabel('Accuracy (%)', fontsize=12, fontweight='bold')
 plt.title('Per-Class Accuracy on Test Set', fontsize=14, fontweight='bold')
-plt.xticks(range(11), range(11))
+plt.xticks(range(N_CLASSES), range(N_CLASSES))
 plt.ylim(0, 105)
 plt.grid(axis='y', alpha=0.3)
 

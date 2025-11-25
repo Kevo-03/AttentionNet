@@ -11,14 +11,14 @@ script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
-INPUT_DATA = os.path.join(PROJECT_ROOT, "processed_data/idx/data_fixed.npy")
-INPUT_LABELS = os.path.join(PROJECT_ROOT, "processed_data/idx/labels_fixed.npy")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final")
+INPUT_DATA = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p/data_memory_safe.npy")
+INPUT_LABELS = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p/labels_memory_safe.npy")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Parameters
-MIN_DENSITY = 0.05  # Keep flows with at least 8% non-zero pixels
+MIN_DENSITY = 0.01  # Keep flows with at least 5% non-zero pixels
 MIN_SAMPLES_PER_CLASS = 0  # Drop classes with fewer samples
 TARGET_BALANCE = 3500  # Target samples per class (balance training set)
 TRAIN_RATIO = 0.7
@@ -27,9 +27,9 @@ TEST_RATIO = 0.15
 
 CLASS_NAMES = {
     0: "Chat (NonVPN)", 1: "Email (NonVPN)", 2: "File (NonVPN)", 
-    3: "Streaming (NonVPN)", 4: "VoIP (NonVPN)",
-    5: "Chat (VPN)", 6: "Email (VPN)", 7: "File (VPN)", 
-    8: "P2P (VPN)", 9: "Streaming (VPN)", 10: "VoIP (VPN)"
+    3: "P2P (NonVPN)",4: "Streaming (NonVPN)", 5: "VoIP (NonVPN)",
+    6: "Chat (VPN)", 7: "Email (VPN)", 8: "File (VPN)", 
+    9: "P2P (VPN)",10: "Streaming (VPN)", 11: "VoIP (VPN)"
 }
 
 print("="*80)
@@ -212,12 +212,12 @@ print(f"  Final distribution: {dict(Counter(y_train_final))}")
 # ============================================================================
 print(f"\n[Step 5/6] Saving datasets...")
 
-np.save(os.path.join(OUTPUT_DIR, "train_data_fixed.npy"), X_train_final)
-np.save(os.path.join(OUTPUT_DIR, "train_labels_fixed.npy"), y_train_final)
-np.save(os.path.join(OUTPUT_DIR, "val_data_fixed.npy"), X_val)
-np.save(os.path.join(OUTPUT_DIR, "val_labels_fixed.npy"), y_val)
-np.save(os.path.join(OUTPUT_DIR, "test_data_fixed.npy"), X_test)
-np.save(os.path.join(OUTPUT_DIR, "test_labels_fixed.npy"), y_test)
+np.save(os.path.join(OUTPUT_DIR, "train_data_memory_safe_own_nonVPN_p2p.npy"), X_train_final)
+np.save(os.path.join(OUTPUT_DIR, "train_labels_memory_safe_own_nonVPN_p2p.npy"), y_train_final)
+np.save(os.path.join(OUTPUT_DIR, "val_data_memory_safe_own_nonVPN_p2p.npy"), X_val)
+np.save(os.path.join(OUTPUT_DIR, "val_labels_memory_safe_own_nonVPN_p2p.npy"), y_val)
+np.save(os.path.join(OUTPUT_DIR, "test_data_memory_safe_own_nonVPN_p2p.npy"), X_test)
+np.save(os.path.join(OUTPUT_DIR, "test_labels_memory_safe_own_nonVPN_p2p.npy"), y_test)
 
 print(f"  ✓ Saved training set: {len(X_train_final)} samples")
 print(f"  ✓ Saved validation set: {len(X_val)} samples")

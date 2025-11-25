@@ -11,7 +11,7 @@ import seaborn as sns
 # SETUP
 # ============================================================================
 PROJECT_ROOT = "/Users/kivanc/Desktop/AttentionNet"
-DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final")
+DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/streaming_test/")
 MODEL_PATH = os.path.join(PROJECT_ROOT, "model_output/best_model.pth")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output")
 

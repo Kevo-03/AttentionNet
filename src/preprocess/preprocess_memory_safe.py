@@ -12,7 +12,7 @@ script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 RAW_DIR = os.path.join(PROJECT_ROOT, "categorized_pcaps")
-IDX_DIR = os.path.join(PROJECT_ROOT, "processed_data/memory_safe")
+IDX_DIR = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p")
 MAX_LEN = 784  # 28x28
 ROWS, COLS = 28, 28
 
@@ -146,7 +146,7 @@ def process_all_pcaps(max_files_per_category=None, max_flows_per_file=None):
     Process all PCAPs directly into images with memory-safe batching.
     """
     label_map = {
-        "NonVPN": {"Chat": 0, "Email": 1, "File": 2, "Streaming": 3, "VoIP": 4, "P2P": 5},
+        "NonVPN": {"Chat": 0, "Email": 1, "File": 2,"P2P": 3, "Streaming": 4, "VoIP": 5},
         "VPN": {"Chat": 6, "Email": 7, "File": 8, "P2P": 9, "Streaming": 10, "VoIP": 11},
     }
 
@@ -296,9 +296,9 @@ def visualize_samples(samples_per_label=16):
         0: "NonVPN-Chat",
         1: "NonVPN-Email",
         2: "NonVPN-File",
-        3: "NonVPN-Streaming",
-        4: "NonVPN-VoIP",
-        5: "NonVPN-P2P",
+        3: "NonVPN-P2P",
+        4: "NonVPN-Streaming",
+        5: "NonVPN-VoIP",
         6: "VPN-Chat",
         7: "VPN-Email",
         8: "VPN-File",
@@ -373,7 +373,7 @@ if __name__ == "__main__":
         print("=" * 60 + "\n")
         visualize_samples()
     else:
-        #process_all_pcaps()
+        process_all_pcaps()
         print("\n" + "=" * 60)
         print("Visualizing results...")
         print("=" * 60 + "\n")
