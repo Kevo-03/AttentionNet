@@ -26,7 +26,7 @@ script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
 DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/transformer_model_pos_encode")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/3_conv/transformer_model_2dpos_encode")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
@@ -124,52 +124,126 @@ class TrafficDataset(Dataset):
 
         return torch.from_numpy(img), torch.tensor(label, dtype=torch.long)
 
-# ============================================================================
-# TRAFFIC CNN (2D) + TRANSFORMER
-# ============================================================================
+import math
+import torch
+import torch.nn as nn
+
+
+# ============================================================
+# 2D SINUSOIDAL POSITIONAL ENCODING
+# ============================================================
+class SinusoidalPositionalEncoding2D(nn.Module):
+    """
+    2D sinusoidal positional encoding.
+
+    Channels are split into 4 chunks:
+      [sin_y, cos_y, sin_x, cos_x]
+
+    We add this on the CNN feature map (B, C, H, W) before
+    flattening to a sequence for the Transformer.
+    """
+    def __init__(self, channels: int, height: int, width: int):
+        super().__init__()
+        assert channels % 4 == 0, "channels must be divisible by 4 for 2D sinusoidal PE"
+        self.channels = channels
+        self.height = height
+        self.width = width
+
+        pe = self._build_pe(channels, height, width)
+        # shape: (1, C, H, W) so it broadcasts across batch
+        self.register_buffer("pe", pe, persistent=False)
+
+    @staticmethod
+    def _build_pe(channels: int, height: int, width: int) -> torch.Tensor:
+        c = channels
+        c_half = c // 2
+        c_quarter = c // 4
+
+        # positions
+        y_pos = torch.arange(height, dtype=torch.float32).unsqueeze(1)  # (H, 1)
+        x_pos = torch.arange(width, dtype=torch.float32).unsqueeze(1)   # (W, 1)
+
+        # frequency terms
+        div_term_y = torch.exp(torch.arange(0, c_quarter, dtype=torch.float32)
+                               * (-math.log(10000.0) / c_quarter))
+        div_term_x = torch.exp(torch.arange(0, c_quarter, dtype=torch.float32)
+                               * (-math.log(10000.0) / c_quarter))
+
+        # (H, c_half): [sin_y | cos_y]
+        pe_y = torch.zeros(height, c_half, dtype=torch.float32)
+        pe_y[:, 0:c_quarter] = torch.sin(y_pos * div_term_y)
+        pe_y[:, c_quarter:c_half] = torch.cos(y_pos * div_term_y)
+
+        # (W, c_half): [sin_x | cos_x]
+        pe_x = torch.zeros(width, c_half, dtype=torch.float32)
+        pe_x[:, 0:c_quarter] = torch.sin(x_pos * div_term_x)
+        pe_x[:, c_quarter:c_half] = torch.cos(x_pos * div_term_x)
+
+        # Combine into (H, W, C)
+        pe = torch.zeros(height, width, c, dtype=torch.float32)
+        # first half = y encoding, broadcast across width
+        pe[..., :c_half] = pe_y.unsqueeze(1).expand(height, width, c_half)
+        # second half = x encoding, broadcast across height
+        pe[..., c_half:] = pe_x.unsqueeze(0).expand(height, width, c_half)
+
+        # (C, H, W) and add batch dim later
+        pe = pe.permute(2, 0, 1).unsqueeze(0)
+        return pe  # (1, C, H, W)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (B, C, H, W) with H=height, W=width
+        return x + self.pe.to(x.device)
+
+
+# ============================================================
+# CNN + TRANSFORMER WITH 2D SINUSOIDAL PE
+# ============================================================
 class TrafficCNN_Transformer(nn.Module):
-    def __init__(self, num_classes=12):
-        super(TrafficCNN_Transformer, self).__init__()
-        
-        # =======================
-        # CNN FEATURE EXTRACTOR
-        # =======================
-        self.conv1 = nn.Conv2d(
-            in_channels=1,
-            out_channels=64,
-            kernel_size=3,
-            padding=1  # keeps 28x28
-        )
+    def __init__(self, num_classes: int = 12):
+        super().__init__()
+
+        # -----------------------
+        # CNN BACKBONE (your 3-layer version)
+        # -----------------------
+        # First layer: wide 1D kernel over width
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=(1, 25), padding=(0, 12))
         self.bn1 = nn.BatchNorm2d(64)
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)  # 28x28 -> 14x14
-        
-        self.conv2 = nn.Conv2d(
-            in_channels=64,
-            out_channels=128,
-            kernel_size=3,
-            padding=1  # keeps 14x14
-        )
+
+        # Second layer: another wide 1D kernel
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=(1, 15), padding=(0, 7))
         self.bn2 = nn.BatchNorm2d(128)
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)  # 14x14 -> 7x7
+
+        # Third layer: 2D kernel
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=(3, 3), padding=1)
+        self.bn3 = nn.BatchNorm2d(256)
+
+        self.pool_width = nn.MaxPool2d((1, 2))   # halves width
+        self.pool_2d = nn.MaxPool2d((2, 2))      # halves H and W
 
         self.relu = nn.ReLU(inplace=True)
         self.dropout = nn.Dropout(0.5)
 
-        # =======================
-        # TRANSFORMER BLOCK
-        # =======================
-        # CNN output: (B, 128, 7, 7)
-        self.d_model = 128              # feature dim per token
-        self.h = 7
-        self.w = 7
-        self.seq_len = self.h * self.w  # 49 tokens
+        # Input (28,28) → shapes:
+        # after conv1 + pool_width:  (64, 28, 14)
+        # after conv2 + pool_width:  (128, 28, 7)
+        # after conv3 + pool_2d:     (256, 14, 3)
 
-        # Learnable positional embeddings: (1, 49, 128)
-        self.pos_embedding = nn.Parameter(
-            torch.randn(1, self.seq_len, self.d_model)
+        self.d_model = 256        # channel dim = embedding dim
+        self.h = 14
+        self.w = 3
+        self.seq_len = self.h * self.w  # 42 tokens
+
+        # 2D sinusoidal positional encoding on (C,H,W)
+        self.pos2d = SinusoidalPositionalEncoding2D(
+            channels=self.d_model,
+            height=self.h,
+            width=self.w,
         )
 
-        self.num_heads = 4      # 128 / 4 = 32
+        # -----------------------
+        # TRANSFORMER
+        # -----------------------
+        self.num_heads = 4        # 256 / 4 = 64
         self.num_layers = 2
 
         self.norm_in = nn.LayerNorm(self.d_model)
@@ -180,74 +254,58 @@ class TrafficCNN_Transformer(nn.Module):
             nhead=self.num_heads,
             dim_feedforward=512,
             dropout=0.1,
-            activation='relu',
-            batch_first=True,  # (B, L, d_model)
+            activation="relu",
+            batch_first=True,   # (B, L, d_model)
         )
         self.transformer = nn.TransformerEncoder(
             encoder_layer,
-            num_layers=self.num_layers
+            num_layers=self.num_layers,
         )
 
-        # =======================
+        # -----------------------
         # CLASSIFIER HEAD
-        # =======================
-        # After transformer:
-        #   x: (B, 49, 128) -> mean over 49 -> (B, 128)
+        # -----------------------
+        # after transformer: (B, L, 256) → mean over L → (B, 256)
         self.fc1 = nn.Linear(self.d_model, 256)
         self.fc2 = nn.Linear(256, num_classes)
 
-    def forward(self, x):
-        # -------------
-        # CNN backbone
-        # -------------
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, 1, 28, 28)
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.pool1(x)           # (B, 64, 14, 14)
-        
-        x = self.conv2(x)
-        x = self.bn2(x)
-        x = self.relu(x)
-        x = self.pool2(x)           # (B, 128, 7, 7)
 
-        # -------------
-        # To sequence
-        # -------------
-        # (B, 128, 7, 7) -> (B, 128, 49)
-        x = x.flatten(2)
-        # (B, 128, 49) -> (B, 49, 128)
-        x = x.permute(0, 2, 1)
+        # ---- CNN ----
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.pool_width(x)   # (B, 64, 28, 14)
 
-        # -------------
-        # Transformer
-        # -------------
-        # LayerNorm before transformer
+        x = self.relu(self.bn2(self.conv2(x)))
+        x = self.pool_width(x)   # (B, 128, 28, 7)
+
+        x = self.relu(self.bn3(self.conv3(x)))
+        x = self.pool_2d(x)      # (B, 256, 14, 3)
+
+        # ---- 2D positional encoding on feature map ----
+        x = self.pos2d(x)        # (B, 256, 14, 3)
+
+        # ---- to sequence for Transformer ----
+        x = x.flatten(2)         # (B, 256, 42)
+        x = x.permute(0, 2, 1)   # (B, 42, 256)
+
+        # LayerNorm before Transformer
         x = self.norm_in(x)
 
-        # Add positional embeddings (broadcast along batch)
-        # x: (B, 49, 128), pos_embedding: (1, 49, 128)
-        x = x + self.pos_embedding[:, :x.size(1), :]
+        # Transformer
+        x = self.transformer(x)  # (B, 42, 256)
 
-        # Transformer encoder
-        x = self.transformer(x)      # (B, 49, 128)
-
-        # LayerNorm after transformer
+        # LayerNorm after Transformer
         x = self.norm_out(x)
 
-        # -------------
-        # Pool over tokens
-        # -------------
-        # Global average over the 49 patches
-        x = x.mean(dim=1)            # (B, 128)
+        # Global average over tokens
+        x = x.mean(dim=1)        # (B, 256)
 
-        # -------------
         # Classifier
-        # -------------
         x = self.dropout(x)
         x = self.relu(self.fc1(x))
         x = self.dropout(x)
-        x = self.fc2(x)              # (B, num_classes)
+        x = self.fc2(x)          # (B, num_classes)
 
         return x
 
@@ -385,7 +443,7 @@ history = {
     'val_macro_f1': []
 }
 
-best_macro_f1 = 0.0
+best_acc = 0.0
 best_model_path = os.path.join(OUTPUT_DIR, "best_model.pth")
 
 early_stop_patience = 10
@@ -417,10 +475,10 @@ for epoch in range(NUM_EPOCHS):
         print(f"LR updated: {old_lr:.6f} → {new_lr:.6f}")
 
     # Early stopping and best model still based on validation accuracy
-    if val_macro_f1 > best_macro_f1:
-        best_macro_f1 = val_macro_f1
+    if val_acc > best_acc:
+        best_acc = val_acc
         torch.save(model.state_dict(), best_model_path)
-        print(f"✓ Saved best model (Val Macro F1: {val_macro_f1:.4f})")
+        print(f"✓ Saved best model (Val Accuracy: {val_acc:.2f})")
         no_improve_epochs = 0
     else:
         no_improve_epochs += 1
@@ -579,7 +637,7 @@ print(f"  • confusion_matrix.png")
 print(f"  • per_class_accuracy.png")
 print(f"  • classification_report.txt")
 print(f"  • training_history.json")
-print(f"\nBest Validation Macro F1: {best_macro_f1:.4f}")
+print(f"\nBest Validation Macro F1: {best_acc:.4f}")
 print(f"Test Accuracy: {test_acc:.2f}%")
 print(f"Test Macro F1: {test_macro_f1:.4f}")
 print("="*80)

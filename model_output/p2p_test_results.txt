@@ -13,11 +13,12 @@ Classification Report:
                     precision    recall  f1-score   support
 
      Chat (NonVPN)      0.000     0.000     0.000         0
+    Email (NonVPN)      0.000     0.000     0.000         0
      File (NonVPN)      0.000     0.000     0.000         0
       P2P (NonVPN)      1.000     0.727     0.842       209
 Streaming (NonVPN)      0.000     0.000     0.000         0
      VoIP (NonVPN)      0.000     0.000     0.000         0
 
           accuracy                          0.727       209
-         macro avg      0.200     0.145     0.168       209
+         macro avg      0.167     0.121     0.140       209
       weighted avg      1.000     0.727     0.842       209
