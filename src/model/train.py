@@ -18,15 +18,22 @@ script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
 DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/2_layer_model")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/2_layer_model/old_online_aug_more_data")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
-BATCH_SIZE = 256
+BATCH_SIZE = 128
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 50
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+if torch.backends.mps.is_available():
+    DEVICE = torch.device("mps")
+    print("Using MPS (Apple GPU)")
+elif torch.cuda.is_available():
+    DEVICE = torch.device("cuda")
+    print("Using CUDA GPU")
+else:
+    DEVICE = torch.device("cpu")
+    print("Using CPU")
 CLASS_NAMES = {
     0: "Chat (NonVPN)", 1: "Email (NonVPN)", 2: "File (NonVPN)", 
     3: "P2P (NonVPN)",4: "Streaming (NonVPN)", 5: "VoIP (NonVPN)", 
