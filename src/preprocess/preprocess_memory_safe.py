@@ -12,7 +12,7 @@ script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 RAW_DIR = os.path.join(PROJECT_ROOT, "categorized_pcaps")
-IDX_DIR = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p")
+IDX_DIR = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p_2")
 MAX_LEN = 784  # 28x28
 ROWS, COLS = 28, 28
 

@@ -123,7 +123,7 @@ class TrafficCNN_Transformer(nn.Module):
 
         # Add positional embeddings (broadcast along batch)
         # x: (B, 49, 256), pos_embedding: (1, 49, 256)
-        #x = x + self.pos_embedding[:, :x.size(1), :]
+        x = x + self.pos_embedding[:, :x.size(1), :]
 
         x = self.transformer(x)             # (B, 49, 256)
         x = self.norm_out(x)

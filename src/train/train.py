@@ -26,14 +26,14 @@ script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
-DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/hybrid_no_pos_encode")
+DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/cnn_backbone")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
 BATCH_SIZE = 128
 LEARNING_RATE = 0.001
-NUM_EPOCHS = 100  # slightly higher for CNN+Transformer
+NUM_EPOCHS = 50  # slightly higher for CNN+Transformer
 
 # Device selection (CPU / CUDA / MPS)
 if torch.backends.mps.is_available():
@@ -160,7 +160,7 @@ print(f"  Test:  {len(test_dataset)} samples")
 # ============================================================================
 print("\n[2/5] Initializing model...")
 
-model = TrafficCNN_Transformer(num_classes=N_CLASSES).to(DEVICE)
+model = TrafficCNN_Backbone(num_classes=N_CLASSES).to(DEVICE)
 criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 
@@ -263,7 +263,7 @@ history = {
 best_acc = 0.0
 best_model_path = os.path.join(OUTPUT_DIR, "best_model.pth")
 
-early_stop_patience = 100
+early_stop_patience = 10
 no_improve_epochs = 0
 
 for epoch in range(NUM_EPOCHS):
