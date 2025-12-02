@@ -221,8 +221,8 @@ class TrafficCNN_Transformer(nn.Module):
         self.pool_2d = nn.MaxPool2d((2, 2))      # halves H and W
 
         self.relu = nn.ReLU(inplace=True)
-        self.dropout = nn.Dropout(0.5)
-
+        self.dropout_fc = nn.Dropout(p=0.5)     # heavy dropout for dense layers
+        self.dropout_out = nn.Dropout(p=0.3)    # light dropout before final output
         # Input (28,28) → shapes:
         # after conv1 + pool_width:  (64, 28, 14)
         # after conv2 + pool_width:  (128, 28, 7)
@@ -283,7 +283,7 @@ class TrafficCNN_Transformer(nn.Module):
         x = self.pool_2d(x)      # (B, 256, 14, 3)
 
         # ---- 2D positional encoding on feature map ----
-        x = self.pos2d(x)        # (B, 256, 14, 3)
+        #x = self.pos2d(x)        # (B, 256, 14, 3)
 
         # ---- to sequence for Transformer ----
         x = x.flatten(2)         # (B, 256, 42)
@@ -302,10 +302,10 @@ class TrafficCNN_Transformer(nn.Module):
         x = x.mean(dim=1)        # (B, 256)
 
         # Classifier
-        x = self.dropout(x)
-        x = self.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = self.fc2(x)          # (B, num_classes)
+        x = self.dropout_fc(x)           # strong dropout before FC1
+        x = self.relu(self.fc1(x))       # hidden FC layer
+        x = self.dropout_out(x)          # lighter dropout before output
+        x = self.fc2(x)                  # logits
 
         return x
 
@@ -348,7 +348,7 @@ criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 
 # ---- Warmup + Cosine ----
-WARMUP_EPOCHS = 5  # 3–5 is usually enough for your scale
+WARMUP_EPOCHS = 10  # 3–5 is usually enough for your scale
 
 warmup_scheduler = LinearLR(
     optimizer,
@@ -575,23 +575,35 @@ print(f"  ✓ Saved: training_history.png")
 plt.close()
 
 # 2. Confusion matrix
+# 2. Confusion matrix (normalized by true class)
 cm = confusion_matrix(all_labels, all_preds)
+
+# Normalize per row (true class)
+cm_norm = cm.astype("float") / cm.sum(axis=1, keepdims=True)
+cm_norm = np.nan_to_num(cm_norm)  # handle any division-by-zero rows safely
+
 plt.figure(figsize=(12, 10))
 sns.heatmap(
-    cm,
+    cm_norm,
     annot=True,
-    fmt='d',
-    cmap='Blues',
-    xticklabels=range(N_CLASSES),
-    yticklabels=range(N_CLASSES)
+    fmt=".2f",
+    cmap="Blues",
+    xticklabels=[CLASS_NAMES[i] for i in range(N_CLASSES)],
+    yticklabels=[CLASS_NAMES[i] for i in range(N_CLASSES)],
+    vmin=0.0,
+    vmax=1.0
 )
-plt.xlabel('Predicted Label', fontsize=12, fontweight='bold')
-plt.ylabel('True Label', fontsize=12, fontweight='bold')
-plt.title(f'Confusion Matrix (Test Accuracy: {test_acc:.2f}%)', 
-         fontsize=14, fontweight='bold')
+plt.xlabel("Predicted Label", fontsize=12, fontweight="bold")
+plt.ylabel("True Label", fontsize=12, fontweight="bold")
+plt.title(
+    f"Normalized Confusion Matrix (Row-wise) – Test Acc: {test_acc:.2f}%",
+    fontsize=14,
+    fontweight="bold"
+)
 plt.tight_layout()
-plt.savefig(os.path.join(OUTPUT_DIR, "confusion_matrix.png"), dpi=150, bbox_inches='tight')
-print(f"  ✓ Saved: confusion_matrix.png")
+plt.savefig(os.path.join(OUTPUT_DIR, "confusion_matrix.png"),
+            dpi=150, bbox_inches="tight")
+print("  ✓ Saved: confusion_matrix.png (normalized)")
 plt.close()
 
 # 3. Per-class accuracy

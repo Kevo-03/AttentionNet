@@ -1,63 +1,47 @@
-# src/models/cnn_backbone.py
-import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-class ECALayer(nn.Module):
-    def __init__(self, channels, gamma=2, b=1):
-        super().__init__()
-        t = int(abs((math.log2(channels) + b) / gamma))
-        k = t if t % 2 == 1 else t + 1
-        k = max(1, k)
+class TrafficCNN_Backbone(nn.Module):
+    def __init__(self, num_classes=12):
+        super(TrafficCNN_Backbone, self).__init__()
 
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.conv = nn.Conv1d(1, 1, kernel_size=k,
-                              padding=(k - 1)//2, bias=False)
-        self.sigmoid = nn.Sigmoid()
+        # Conv block 1: 28x28 -> 14x14
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.pool1 = nn.MaxPool2d(2, 2)
 
-    def forward(self, x):
-        # x: (B, C, H, W)
-        y = self.avg_pool(x)                 # (B, C, 1, 1)
-        y = y.squeeze(-1).transpose(-1, -2)  # (B, 1, C)
-        y = self.conv(y)                     # (B, 1, C)
-        y = self.sigmoid(y)                  # (B, 1, C)
-        y = y.transpose(-1, -2).unsqueeze(-1)  # (B, C, 1, 1)
-        return x * y.expand_as(x)
+        # Conv block 2: 14x14 -> 7x7
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(128)
+        self.pool2 = nn.MaxPool2d(2, 2)
 
+        # Conv block 3: 7x7 -> 7x7 (no pooling)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm2d(256)
 
-class CNNBackbone(nn.Module):
-    """
-    2-block CNN backbone: (B,1,28,28) → (B,128,7,7)
-    with optional ECA after each block.
-    """
-    def __init__(self, in_channels=1, c1=64, c2=128, use_eca=False):
-        super().__init__()
-        self.use_eca = use_eca
+        # Fully connected head
+        self.relu = nn.ReLU(inplace=True)
+        self.dropout = nn.Dropout(0.5)
 
-        self.conv1 = nn.Conv2d(in_channels, c1, kernel_size=3, padding=1)
-        self.bn1   = nn.BatchNorm2d(c1)
-        self.pool1 = nn.MaxPool2d(2, 2)   # 28→14
-
-        self.conv2 = nn.Conv2d(c1, c2, kernel_size=3, padding=1)
-        self.bn2   = nn.BatchNorm2d(c2)
-        self.pool2 = nn.MaxPool2d(2, 2)   # 14→7
-
-        if use_eca:
-            self.eca1 = ECALayer(c1)
-            self.eca2 = ECALayer(c2)
-        else:
-            self.eca1 = None
-            self.eca2 = None
+        self.fc1 = nn.Linear(256 * 7 * 7, 256)
+        self.fc2 = nn.Linear(256, num_classes)
 
     def forward(self, x):
-        x = self.pool1(F.relu(self.bn1(self.conv1(x))))
-        if self.eca1 is not None:
-            x = self.eca1(x)
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.pool1(x)
 
-        x = self.pool2(F.relu(self.bn2(self.conv2(x))))
-        if self.eca2 is not None:
-            x = self.eca2(x)
+        x = self.relu(self.bn2(self.conv2(x)))
+        x = self.pool2(x)
 
-        # (B, 128, 7, 7)
+        x = self.relu(self.bn3(self.conv3(x)))
+
+        # Flatten
+        x = x.view(x.size(0), -1)
+
+        # Classifier
+        x = self.dropout(x)
+        x = self.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
+
         return x
