@@ -3,20 +3,21 @@ MODEL TEST RESULTS ON STREAMINGTEST DATA
 ================================================================================
 
 Total Test Samples: 130
-Overall Test Accuracy: 57.69%
+Overall Test Accuracy: 53.85%
 
-Streaming (Label 4) Accuracy: 57.69%
-  Correct predictions: 75 / 130
+Streaming (Label 4) Accuracy: 53.85%
+  Correct predictions: 70 / 130
 
 Classification Report:
 --------------------------------------------------------------------------------
                     precision    recall  f1-score   support
 
      Chat (NonVPN)      0.000     0.000     0.000         0
+     File (NonVPN)      0.000     0.000     0.000         0
       P2P (NonVPN)      0.000     0.000     0.000         0
-Streaming (NonVPN)      1.000     0.577     0.732       130
+Streaming (NonVPN)      1.000     0.538     0.700       130
      VoIP (NonVPN)      0.000     0.000     0.000         0
 
-          accuracy                          0.577       130
-         macro avg      0.250     0.144     0.183       130
-      weighted avg      1.000     0.577     0.732       130
+          accuracy                          0.538       130
+         macro avg      0.200     0.108     0.140       130
+      weighted avg      1.000     0.538     0.700       130

@@ -31,7 +31,7 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosteri
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
-BATCH_SIZE = 128
+BATCH_SIZE = 256
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 50  # slightly higher for CNN+Transformer
 
