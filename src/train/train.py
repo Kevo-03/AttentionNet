@@ -10,7 +10,7 @@ import seaborn as sns
 from tqdm import tqdm
 import json
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
-from src.model import TrafficCNN_Backbone, TrafficCNN_Transformer
+from src.model import TrafficCNN_Backbone, TrafficCNN_Transformer, TrafficCNN_Tiny
 import random
 SEED = 42
 random.seed(SEED)
@@ -18,6 +18,8 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
+if torch.backends.mps.is_available():
+    torch.mps.manual_seed(SEED)
 
 # ============================================================================
 # CONFIGURATION
@@ -27,7 +29,7 @@ script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
 DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/cnn_backbone")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/cnn_backbone_kernel_size_5")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
@@ -161,7 +163,7 @@ print(f"  Test:  {len(test_dataset)} samples")
 print("\n[2/5] Initializing model...")
 
 model = TrafficCNN_Backbone(num_classes=N_CLASSES).to(DEVICE)
-criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 
 # ---- Warmup + Cosine ----
@@ -465,7 +467,7 @@ print(f"  • confusion_matrix.png")
 print(f"  • per_class_accuracy.png")
 print(f"  • classification_report.txt")
 print(f"  • training_history.json")
-print(f"\nBest Validation Macro F1: {best_acc:.4f}")
+print(f"\nBest Validation Accuracy: {best_acc:.4f}")
 print(f"Test Accuracy: {test_acc:.2f}%")
 print(f"Test Macro F1: {test_macro_f1:.4f}")
 print("="*80)

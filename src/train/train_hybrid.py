@@ -5,19 +5,13 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, classification_report, f1_score
+from sklearn.metrics import confusion_matrix, classification_report, f1_score, accuracy_score
 import seaborn as sns
 from tqdm import tqdm
 import json
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR, CosineAnnealingWarmRestarts
 from src.model import TrafficCNN_Backbone, TrafficCNN_Transformer
 import random
-SEED = 42
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(SEED)
 
 # ============================================================================
 # CONFIGURATION
@@ -27,7 +21,7 @@ script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
 DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/hybrid")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/hybrid_8_heads")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
@@ -249,7 +243,7 @@ history = {
 best_acc = 0.0
 best_model_path = os.path.join(OUTPUT_DIR, "best_model.pth")
 
-early_stop_patience = 100
+early_stop_patience = 20
 no_improve_epochs = 0
 
 for epoch in range(NUM_EPOCHS):
@@ -382,7 +376,6 @@ plt.savefig(os.path.join(OUTPUT_DIR, "training_history.png"), dpi=150, bbox_inch
 print(f"  ✓ Saved: training_history.png")
 plt.close()
 
-# 2. Confusion matrix
 # 2. Confusion matrix (normalized by true class)
 cm = confusion_matrix(all_labels, all_preds)
 
@@ -414,8 +407,6 @@ plt.savefig(os.path.join(OUTPUT_DIR, "confusion_matrix.png"),
 print("  ✓ Saved: confusion_matrix.png (normalized)")
 plt.close()
 
-# 3. Per-class accuracy
-from sklearn.metrics import accuracy_score
 class_accuracies = []
 for i in range(N_CLASSES):
     mask = all_labels == i
