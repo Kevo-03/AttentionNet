@@ -1,21 +1,21 @@
-Test Accuracy: 87.05%
-Test Macro F1: 0.8938
+Test Accuracy: 85.57%
+Test Macro F1: 0.8820
 
                     precision    recall  f1-score   support
 
-     Chat (NonVPN)      0.779     0.638     0.702       525
-    Email (NonVPN)      0.697     0.824     0.755       444
-     File (NonVPN)      0.907     0.850     0.877       525
-      P2P (NonVPN)      0.981     0.974     0.977       156
-Streaming (NonVPN)      0.930     0.893     0.911       281
-     VoIP (NonVPN)      0.807     0.897     0.849       525
-        Chat (VPN)      0.975     0.966     0.970       525
-       Email (VPN)      0.955     0.933     0.944        45
-        File (VPN)      0.910     0.863     0.886       153
-         P2P (VPN)      0.973     0.986     0.979        72
-   Streaming (VPN)      0.902     0.929     0.915        99
-        VoIP (VPN)      0.950     0.968     0.958       525
+     Chat (NonVPN)      0.771     0.514     0.617       525
+    Email (NonVPN)      0.626     0.847     0.720       444
+     File (NonVPN)      0.899     0.848     0.873       525
+      P2P (NonVPN)      0.975     0.987     0.981       156
+Streaming (NonVPN)      0.926     0.890     0.907       281
+     VoIP (NonVPN)      0.804     0.893     0.847       525
+        Chat (VPN)      0.969     0.964     0.967       525
+       Email (VPN)      0.930     0.889     0.909        45
+        File (VPN)      0.901     0.889     0.895       153
+         P2P (VPN)      0.986     1.000     0.993        72
+   Streaming (VPN)      0.910     0.919     0.915        99
+        VoIP (VPN)      0.958     0.966     0.962       525
 
-          accuracy                          0.870      3875
-         macro avg      0.897     0.893     0.894      3875
-      weighted avg      0.873     0.870     0.870      3875
+          accuracy                          0.856      3875
+         macro avg      0.888     0.884     0.882      3875
+      weighted avg      0.862     0.856     0.853      3875

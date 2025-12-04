@@ -29,11 +29,11 @@ script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
 DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/cnn_backbone_kernel_size_5")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/cnn_backbone_no_aug_smoothing")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
-BATCH_SIZE = 256
+BATCH_SIZE = 128
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 50  # slightly higher for CNN+Transformer
 
@@ -136,7 +136,7 @@ print("\n[1/5] Loading datasets...")
 train_dataset = TrafficDataset(
     os.path.join(DATA_DIR, "train_data_memory_safe_own_nonVPN_p2p.npy"),
     os.path.join(DATA_DIR, "train_labels_memory_safe_own_nonVPN_p2p.npy"),
-    augment=True,          # <-- turn on for training
+    augment=False,          # <-- turn on for training
 )
 val_dataset = TrafficDataset(
     os.path.join(DATA_DIR, "val_data_memory_safe_own_nonVPN_p2p.npy"),
@@ -163,7 +163,7 @@ print(f"  Test:  {len(test_dataset)} samples")
 print("\n[2/5] Initializing model...")
 
 model = TrafficCNN_Backbone(num_classes=N_CLASSES).to(DEVICE)
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 
 # ---- Warmup + Cosine ----
@@ -288,7 +288,6 @@ for epoch in range(NUM_EPOCHS):
 
     # Cosine annealing: step every epoch
     scheduler.step()
-
     new_lr = optimizer.param_groups[0]['lr']
     if new_lr != old_lr:
         print(f"LR updated: {old_lr:.6f} → {new_lr:.6f}")

@@ -13,7 +13,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
 INPUT_DATA = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p_2/data_memory_safe.npy")
 INPUT_LABELS = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p_2/labels_memory_safe.npy")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2/ratio_change")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -21,8 +21,8 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 MIN_DENSITY = 0.01  # Keep flows with at least 5% non-zero pixels
 MIN_SAMPLES_PER_CLASS = 0  # Drop classes with fewer samples
 TARGET_BALANCE = 3500  # Target samples per class (balance training set)
-TRAIN_RATIO = 0.8
-VAL_RATIO = 0.05
+TRAIN_RATIO = 0.7
+VAL_RATIO = 0.15
 TEST_RATIO = 0.15
 
 CLASS_NAMES = {

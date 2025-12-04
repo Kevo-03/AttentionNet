@@ -1,0 +1,29 @@
+================================================================================
+MODEL TEST RESULTS ON FILE TRANSFER TEST DATA
+================================================================================
+
+Total Test Samples: 101037
+Overall Test Accuracy: 26.77%
+
+File (Label 2) Accuracy: 26.77%
+  Correct predictions: 27045 / 101037
+
+Classification Report:
+--------------------------------------------------------------------------------
+                    precision    recall  f1-score   support
+
+     Chat (NonVPN)      0.000     0.000     0.000         0
+    Email (NonVPN)      0.000     0.000     0.000         0
+     File (NonVPN)      1.000     0.268     0.422    101037
+      P2P (NonVPN)      0.000     0.000     0.000         0
+Streaming (NonVPN)      0.000     0.000     0.000         0
+     VoIP (NonVPN)      0.000     0.000     0.000         0
+        Chat (VPN)      0.000     0.000     0.000         0
+       Email (VPN)      0.000     0.000     0.000         0
+        File (VPN)      0.000     0.000     0.000         0
+         P2P (VPN)      0.000     0.000     0.000         0
+   Streaming (VPN)      0.000     0.000     0.000         0
+
+          accuracy                          0.268    101037
+         macro avg      0.091     0.024     0.038    101037
+      weighted avg      1.000     0.268     0.422    101037
