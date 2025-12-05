@@ -21,7 +21,7 @@ script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
 DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2/ratio_change")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/2layer_cnn_hybrid_256ff_128outchannel")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/old_hybrid_15_val_ratio")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
@@ -156,7 +156,7 @@ print(f"  Test:  {len(test_dataset)} samples")
 # ============================================================================
 print("\n[2/5] Initializing model...")
 
-model = TrafficCNN_TinyTransformer(num_classes=N_CLASSES).to(DEVICE)
+model = TrafficCNN_Transformer(num_classes=N_CLASSES).to(DEVICE)
 criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 optimizer = optim.AdamW(model.parameters(), lr=BASE_LR * 0.1, weight_decay=1e-4)
 

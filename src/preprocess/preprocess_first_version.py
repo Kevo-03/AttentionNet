@@ -11,7 +11,7 @@ script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 RAW_DIR = os.path.join(PROJECT_ROOT, "categorized_pcaps")
 FLOW_DIR = os.path.join(PROJECT_ROOT,"processed_data/flows")
-IDX_DIR = os.path.join(PROJECT_ROOT,"processed_data/idx")
+IDX_DIR = os.path.join(PROJECT_ROOT,"processed_data/first_v")
 MAX_LEN = 784  # 28x28
 ROWS, COLS = 28, 28
 
@@ -51,7 +51,7 @@ def split_to_flows(pcap_path, output_dir):
 
 
 def run_step1_split_all():
-    for vpn_type in ["VPN", "NonVPN"]:
+    for vpn_type in ["NonVPN", "VPN"]:
         for category in os.listdir(os.path.join(RAW_DIR, vpn_type)):
             category_dir = os.path.join(RAW_DIR, vpn_type, category)
             if not os.path.isdir(category_dir):

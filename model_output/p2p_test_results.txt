@@ -2,27 +2,23 @@
 MODEL TEST RESULTS ON P2P TEST DATA
 ================================================================================
 
-Total Test Samples: 7517
-Overall Test Accuracy: 1.86%
+Total Test Samples: 209
+Overall Test Accuracy: 77.03%
 
-P2P (Label 3) Accuracy: 1.86%
-  Correct predictions: 140 / 7517
+P2P (Label 3) Accuracy: 77.03%
+  Correct predictions: 161 / 209
 
 Classification Report:
 --------------------------------------------------------------------------------
                     precision    recall  f1-score   support
 
      Chat (NonVPN)      0.000     0.000     0.000         0
-    Email (NonVPN)      0.000     0.000     0.000         0
      File (NonVPN)      0.000     0.000     0.000         0
-      P2P (NonVPN)      1.000     0.019     0.037      7517
+      P2P (NonVPN)      1.000     0.770     0.870       209
 Streaming (NonVPN)      0.000     0.000     0.000         0
      VoIP (NonVPN)      0.000     0.000     0.000         0
-        Chat (VPN)      0.000     0.000     0.000         0
-       Email (VPN)      0.000     0.000     0.000         0
-         P2P (VPN)      0.000     0.000     0.000         0
         VoIP (VPN)      0.000     0.000     0.000         0
 
-          accuracy                          0.019      7517
-         macro avg      0.100     0.002     0.004      7517
-      weighted avg      1.000     0.019     0.037      7517
+          accuracy                          0.770       209
+         macro avg      0.167     0.128     0.145       209
+      weighted avg      1.000     0.770     0.870       209
