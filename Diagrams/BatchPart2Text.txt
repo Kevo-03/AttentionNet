@@ -1,0 +1,29 @@
+@startuml
+participant "PCAP Processing" as PA
+participant "Dataset Merger" as MW
+database "File System" as FS
+
+PA -> MW: Combine all saved batches into final dataset files
+activate MW
+
+MW -> FS: Discover all batch image and label files on disk
+FS --> MW: List of batch file names and locations
+
+MW -> MW: Read metadata to determine\nnumber of samples in each batch
+MW -> MW: Sum batch sizes to compute\ntotal number of samples
+MW -> MW: Allocate final dataset structures\nfor all images and labels
+
+loop For each batch on disk
+    MW -> FS: Load this batch's image and label data
+    FS --> MW: Batch data arrays
+
+    MW -> MW: Copy batch data into final dataset arrays\nat the correct offset range
+    MW -> MW: Advance offset for the next batch
+end
+
+MW -> FS: Delete temporary batch files and batch folder
+FS --> MW: Temporary storage removed
+
+MW --> PA: Report final dataset file paths\nand total number of samples
+deactivate MW
+@enduml

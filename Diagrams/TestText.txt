@@ -1,0 +1,40 @@
+@startuml
+participant "Evaluation Controller" as EC
+participant "Classification Model" as M
+participant "Test Data Loader" as TDL
+participant "Metrics" as Metrics
+database "File System" as FS
+
+EC -> FS: Read previously saved best model checkpoint\nfrom the output directory
+FS --> EC: Stored model parameters
+EC -> M: Load parameters into the model\nand move model to the selected device
+M --> EC: Model ready for evaluation
+
+EC -> M: Switch model into evaluation mode
+EC -> EC: Prepare empty collections\nfor predicted labels and true labels
+
+loop For each mini-batch from test data
+    EC -> TDL: Request next test mini-batch
+    TDL --> EC: Provide test images and labels
+
+    EC -> EC: Move images to the selected device
+
+    EC -> M: Perform forward pass on test images
+    M --> EC: Predicted class scores for the batch
+
+    EC -> EC: Convert scores to predicted class indices
+    EC -> EC: Append predicted classes and true labels\ninto their respective collections
+end
+
+EC -> Metrics: Compute overall classification accuracy\nusing all predicted and true labels
+Metrics --> EC: Test accuracy value
+
+EC -> Metrics: Compute macro-averaged F1 score\nacross all classes
+Metrics --> EC: Test macro F1 value
+
+EC -> Metrics: Generate a detailed classification summary\nincluding per-class precision, recall, and F1
+Metrics --> EC: Human-readable classification report text
+
+EC -> FS: Write a text file containing\noverall test accuracy, macro F1,\nand the detailed classification report
+FS --> EC: Report file saved to disk
+@enduml

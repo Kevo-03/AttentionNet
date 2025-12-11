@@ -1,0 +1,28 @@
+@startuml
+participant "PCAP Processing" as PA
+participant "Flow Extraction" as FX
+
+PA -> FX: Begin converting buffered flows into images
+activate FX
+
+box "Convert Flow Bytes To Unique Images"
+loop For each completed flow buffer
+    FX -> FX: Convert buffered bytes into\n28x28 grayscale image (byte array)
+
+    alt Buffer contains no usable payload
+        FX -> FX: Skip this flow
+    else
+        FX -> FX: Compute image hash to detect duplicates
+
+        alt Matching hash found
+            FX -> FX: Reject duplicate image
+        else
+            FX --> PA: Provide unique image with category label
+        end
+    end
+end
+end box
+
+FX --> PA: Completed flow image generation\nfor this PCAP file
+deactivate FX
+@enduml

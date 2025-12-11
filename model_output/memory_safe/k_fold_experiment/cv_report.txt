@@ -1,0 +1,23 @@
+CV Average Accuracy: 64.55% (+/- 0.08%)
+Best Fold: 1
+Test Accuracy: 64.88%
+Test Macro F1: 0.4995
+
+                    precision    recall  f1-score   support
+
+     Chat (NonVPN)      0.159     0.019     0.034       525
+    Email (NonVPN)      0.494     0.660     0.565       444
+     File (NonVPN)      0.614     0.764     0.681       525
+      P2P (NonVPN)      0.854     0.673     0.753       156
+Streaming (NonVPN)      0.835     0.359     0.502       281
+     VoIP (NonVPN)      0.526     0.966     0.681       525
+        Chat (VPN)      0.954     0.912     0.933       525
+       Email (VPN)      0.000     0.000     0.000        45
+        File (VPN)      0.530     0.569     0.549       153
+         P2P (VPN)      1.000     0.097     0.177        72
+   Streaming (VPN)      0.727     0.162     0.264        99
+        VoIP (VPN)      0.765     0.968     0.854       525
+
+          accuracy                          0.649      3875
+         macro avg      0.622     0.512     0.500      3875
+      weighted avg      0.619     0.649     0.595      3875

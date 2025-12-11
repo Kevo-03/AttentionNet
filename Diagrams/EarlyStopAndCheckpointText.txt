@@ -1,0 +1,16 @@
+@startuml
+participant "Training Controller" as TC
+database "File System" as FS
+
+alt Validation accuracy improved
+    TC -> FS: Store current model parameters\nas new best checkpoint
+    FS --> TC: Checkpoint saved
+    TC -> TC: Update best accuracy record\nand reset patience counter
+else Validation accuracy not improved
+    TC -> TC: Increase no-improvement counter
+end
+
+opt Patience threshold exceeded
+    TC -> TC: Stop training and exit epoch loop
+end
+@enduml

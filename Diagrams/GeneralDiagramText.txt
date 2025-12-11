@@ -1,0 +1,25 @@
+@startuml
+actor Actor
+participant "Main Script" as Main
+participant "PCAP Processing" as PA
+participant "Visualization" as VS
+
+
+Actor -> Main: Start the program
+activate Main
+
+Main -> PA: Start processing all PCAP files
+activate PA
+
+PA --> Main: Report total number of processed samples
+deactivate PA
+
+Main -> VS: Generate dataset visualizations
+activate VS
+
+VS --> Main: Provide statistics and preview images
+deactivate VS
+
+Main --> Actor: Show results and output locations
+deactivate Main
+@enduml

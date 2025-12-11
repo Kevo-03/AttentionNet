@@ -1,0 +1,24 @@
+================================================================================
+MODEL TEST RESULTS ON CHAT TEST DATA
+================================================================================
+
+Total Test Samples: 64
+Overall Test Accuracy: 21.88%
+
+Chat (Label 0) Accuracy: 21.88%
+  Correct predictions: 14 / 64
+
+Classification Report:
+--------------------------------------------------------------------------------
+                    precision    recall  f1-score   support
+
+     Chat (NonVPN)      1.000     0.219     0.359        64
+    Email (NonVPN)      0.000     0.000     0.000         0
+     File (NonVPN)      0.000     0.000     0.000         0
+      P2P (NonVPN)      0.000     0.000     0.000         0
+Streaming (NonVPN)      0.000     0.000     0.000         0
+     VoIP (NonVPN)      0.000     0.000     0.000         0
+
+          accuracy                          0.219        64
+         macro avg      0.167     0.036     0.060        64
+      weighted avg      1.000     0.219     0.359        64

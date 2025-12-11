@@ -1,0 +1,75 @@
+@startuml
+participant "PCAP Processing" as PA
+participant "Flow Extraction" as FX
+participant "Packet Filtering and\nAnonymization" as PF
+participant "PcapReader" as PR
+
+PA -> FX: Extract flow images from this PCAP file
+activate FX
+
+FX -> PR: Open file and begin reading packets
+activate PR
+PR --> FX: Provide packets one by one
+deactivate PR
+
+box "Packet Validation and Flow Assignment"
+loop For each packet in the file
+    FX -> PF: Validate packet format and protocol relevance
+    activate PF
+    PF --> FX: Valid / Invalid
+    deactivate PF
+
+    alt Packet invalid or not IP/TCP/UDP
+        FX -> FX: Discard packet
+    else
+        FX -> PF: Check if packet is a retransmission
+        activate PF
+        PF --> FX: Retransmission / Allowed
+        deactivate PF
+
+        alt Packet is a retransmission
+            FX -> FX: Skip packet
+        else
+            FX -> PF: Determine flow key\n(based on anonymized source/destination\nIP and port + protocol)
+            activate PF
+            PF --> FX: Identified flow key
+            deactivate PF
+
+            FX -> FX: Check size of existing buffer\nfor this flow
+
+            alt Buffer already reached MAX_LEN
+                FX -> FX: Ignore additional packet bytes\nfor this flow
+            else
+                FX -> PF: Anonymize IP and MAC addresses\nand convert to clean packet bytes
+                activate PF
+                PF --> FX: Cleaned packet bytes
+                deactivate PF
+
+                FX -> FX: Append cleaned bytes to flow buffer
+            end
+        end
+    end
+end
+end box
+
+box "Convert Flow Bytes To Unique Images"
+loop For each finished flow buffer
+    FX -> FX: Convert bytes into 28x28 grayscale image(byte array)
+
+    alt Flow produced no usable bytes
+        FX -> FX: Skip this flow
+    else
+        FX -> FX: Compute image hash to detect duplicates
+
+        alt Image already exists
+            FX -> FX: Reject duplicate image
+        else
+            FX --> PA: Provide unique image with its category label
+        end
+    end
+end
+end box
+
+FX --> PA: Completed flow image extraction\nfor this PCAP file
+deactivate FX
+@enduml

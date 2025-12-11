@@ -1,0 +1,37 @@
+@startuml
+participant "Training Controller" as TC
+participant "Classification Model" as M
+participant "Training Data Loader" as DL
+participant "Loss Computation Module" as Loss
+participant "Optimization Module" as Opt
+
+loop For each training epoch
+    TC -> M: Switch model into training mode
+    TC -> TC: Reset statistics for training loss and accuracy
+
+    loop For each batch request
+        TC -> DL: Request next mini-batch
+        DL --> TC: Provide batch of images and labels
+
+        TC -> TC: Move batch to selected device\n(GPU or CPU)
+
+        TC -> Opt: Clear previous gradients
+        Opt --> TC: Gradients cleared
+
+        TC -> M: Perform forward pass on batch
+        M --> TC: Predicted output scores
+
+        TC -> Loss: Compute loss\nfrom predictions and true labels
+        Loss --> TC: Loss value
+
+        TC -> TC: Backpropagate loss\naccumulate gradients
+
+        TC -> Opt: Update model parameters
+        Opt --> TC: Optimized model weights
+
+        TC -> TC: Update running training metrics\n(loss and accuracy)
+    end
+
+    TC -> TC: Compute average performance metrics\nfor this training epoch
+end
+@enduml

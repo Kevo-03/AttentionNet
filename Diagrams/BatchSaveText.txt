@@ -1,0 +1,67 @@
+@startuml
+participant "PCAP Processing" as PA
+participant "Batch Writer" as BW
+participant "Dataset Merger" as MW
+database "File System" as FS
+
+activate PA
+loop For each generated flow image
+    PA -> PA: Insert image and label into\ncurrent batch at current batch index
+    PA -> PA: Increase batch index by one
+    PA -> PA: Increase total processed sample count
+
+    opt Batch index has reached maximum capacity
+        PA -> PA: Mark current batch as full
+        PA -> BW: Request saving of the full batch to disk\nusing current batch number
+        activate BW
+
+        BW -> FS: Write batch image array file\nand batch label array file
+        FS --> BW: Batch files stored successfully
+
+        BW --> PA: Confirm batch saved
+        deactivate BW
+
+        PA -> PA: Increase batch number for next batch
+        PA -> PA: Reset batch index to zero\nand clear in-memory batch buffers
+    end
+end
+
+opt Remaining images that do not fill a full batch
+    PA -> PA: Recognize partially filled final batch
+    PA -> BW: Request saving of final partial batch\nusing current batch number
+    activate BW
+
+    BW -> FS: Write last batch image and label files\nwith current batch size
+    FS --> BW: Last batch stored
+
+    BW --> PA: Confirm final partial batch saved
+    deactivate BW
+
+    PA -> PA: Reset batch index and clear buffers
+end
+deactivate PA
+
+PA -> MW: Combine all saved batches into final dataset files
+activate MW
+
+MW -> FS: Discover all batch image and label files on disk
+FS --> MW: List of batch file names and locations
+
+MW -> MW: Read metadata to determine\nnumber of samples in each batch
+MW -> MW: Sum batch sizes to compute\ntotal number of samples
+MW -> MW: Allocate final dataset structures\nfor all images and labels
+
+loop For each batch on disk
+    MW -> FS: Load this batch's image and label data
+    FS --> MW: Batch data arrays
+
+    MW -> MW: Copy batch data into final dataset arrays\nat the correct offset range
+    MW -> MW: Advance offset for the next batch
+end
+
+MW -> FS: Delete temporary batch files and batch folder
+FS --> MW: Temporary storage removed
+
+MW --> PA: Report final dataset file paths\nand total number of samples
+deactivate MW
+@enduml

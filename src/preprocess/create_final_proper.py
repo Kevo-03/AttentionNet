@@ -18,7 +18,7 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_no
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Parameters
-MIN_DENSITY = 0.01  # Keep flows with at least 5% non-zero pixels
+MIN_DENSITY = 0.01  # Keep flows with at least 1% non-zero pixels
 MIN_SAMPLES_PER_CLASS = 0  # Drop classes with fewer samples
 TARGET_BALANCE = 8000  # Target samples per class (balance training set)
 TRAIN_RATIO = 0.7
