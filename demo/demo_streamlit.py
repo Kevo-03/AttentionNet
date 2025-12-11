@@ -377,7 +377,8 @@ def capture_page(model, device):
     """)
     
     # Capture settings
-    col1, col2, col3 = st.columns(3)
+    st.subheader("⚙️ Capture Settings")
+    col1, col2 = st.columns(2)
     
     with col1:
         interface = st.text_input(
@@ -387,22 +388,26 @@ def capture_page(model, device):
         )
     
     with col2:
-        duration = st.number_input(
+        duration = st.slider(
             "Capture Duration (seconds)",
             min_value=5,
-            max_value=60,
-            value=10,
-            help="How long to capture packets"
+            max_value=120,
+            value=15,
+            help="How long to capture packets. Use longer duration for more traffic."
         )
     
+    # Flow limit settings
+    col3, col4 = st.columns(2)
     with col3:
-        max_flows = st.number_input(
-            "Max Flows",
-            min_value=5,
-            max_value=100,
-            value=20,
-            help="Maximum number of flows to process"
-        )
+        capture_all = st.checkbox("Capture all flows", value=True, key="capture_all_flows")
+    with col4:
+        if capture_all:
+            max_flows = None
+        else:
+            max_flows = st.number_input(
+                "Max Flows", min_value=5, max_value=500, value=100,
+                key="capture_max_flows"
+            )
     
     # Common interfaces help
     with st.expander("ℹ️ Common interface names"):
@@ -410,29 +415,41 @@ def capture_page(model, device):
         | OS | Interface | Description |
         |----|-----------|-------------|
         | **macOS** | `en0` | WiFi |
-        | **macOS** | `en1` | Ethernet |
+        | **macOS** | `bridge100` | Internet Sharing (Firewall mode) |
         | **Linux** | `eth0` | Ethernet |
         | **Linux** | `wlan0` | WiFi |
-        | **Linux** | `enp3s0` | Ethernet (newer naming) |
         """)
     
     # Capture button
-    if st.button("🔴 Start Capture", type="primary"):
+    st.markdown("---")
+    if st.button("🔴 Start Capture", type="primary", use_container_width=True):
         
-        # Perform live capture
-        with st.spinner(f"Capturing on {interface} for {duration} seconds..."):
-            try:
-                images, flow_info = capture_live_traffic(interface, duration, max_flows)
-            except PermissionError:
-                st.error("""
-                **Permission denied!** Live capture requires root/admin privileges.
-                
-                Run with: `sudo streamlit run demo_streamlit.py`
-                """)
-                return
-            except Exception as e:
-                st.error(f"Capture error: {e}")
-                return
+        # Create placeholders for live updates
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        stats_text = st.empty()
+        
+        try:
+            images, flow_info = capture_live_traffic_with_progress(
+                interface, duration, max_flows, 
+                progress_bar, status_text, stats_text
+            )
+            
+            # Clear progress indicators
+            progress_bar.empty()
+            status_text.empty()
+            stats_text.empty()
+            
+        except PermissionError:
+            st.error("""
+            **Permission denied!** Live capture requires root/admin privileges.
+            
+            Run with: `sudo streamlit run demo_streamlit.py`
+            """)
+            return
+        except Exception as e:
+            st.error(f"Capture error: {e}")
+            return
         
         if not images:
             st.warning("No flows captured. Try a longer duration or check the interface name.")
@@ -455,6 +472,138 @@ def capture_page(model, device):
     # Display results if available
     if 'capture_results' in st.session_state:
         display_capture_results(st.session_state['capture_results'])
+
+
+def capture_live_traffic_with_progress(interface, duration, max_flows, progress_bar, status_text, stats_text):
+    """
+    Capture live network traffic with progress updates.
+    
+    Args:
+        interface: Network interface name (e.g., 'en0')
+        duration: Capture duration in seconds
+        max_flows: Maximum number of flows to return (None for unlimited)
+        progress_bar: Streamlit progress bar widget
+        status_text: Streamlit placeholder for status message
+        stats_text: Streamlit placeholder for stats
+    
+    Returns:
+        images: List of 28x28 numpy arrays
+        flow_info: List of flow metadata dicts
+    """
+    import time
+    from scapy.all import sniff, IP, TCP, UDP
+    
+    flow_buffers = defaultdict(bytearray)
+    seq_tracker = defaultdict(set)
+    packet_count = [0]  # Use list for mutable counter in nested function
+    
+    def packet_callback(pkt):
+        """Process each captured packet."""
+        if IP not in pkt or (TCP not in pkt and UDP not in pkt):
+            return
+        
+        packet_count[0] += 1
+        
+        # Create flow key
+        ip = pkt[IP]
+        proto = ip.proto
+        sport = pkt[TCP].sport if TCP in pkt else pkt[UDP].sport if UDP in pkt else 0
+        dport = pkt[TCP].dport if TCP in pkt else pkt[UDP].dport if UDP in pkt else 0
+        
+        sorted_ips = tuple(sorted((ip.src, ip.dst)))
+        sorted_ports = tuple(sorted((sport, dport)))
+        key = (sorted_ips[0], sorted_ips[1], sorted_ports[0], sorted_ports[1], proto)
+        
+        # Skip retransmissions
+        if TCP in pkt:
+            conn_key = (ip.src, ip.dst, pkt[TCP].sport, pkt[TCP].dport)
+            seq = pkt[TCP].seq
+            if seq in seq_tracker[conn_key]:
+                return
+            seq_tracker[conn_key].add(seq)
+        
+        # Add bytes to flow buffer
+        buffer = flow_buffers[key]
+        if len(buffer) >= MAX_LEN:
+            return
+        
+        # Anonymize packet
+        pkt_copy = pkt.copy()
+        pkt_copy[IP].src = "0.0.0.0"
+        pkt_copy[IP].dst = "0.0.0.0"
+        if "Ether" in pkt_copy:
+            pkt_copy["Ether"].src = "00:00:00:00:00:00"
+            pkt_copy["Ether"].dst = "00:00:00:00:00:00"
+        
+        pkt_bytes = bytes(pkt_copy)
+        remaining = MAX_LEN - len(buffer)
+        buffer.extend(pkt_bytes[:remaining])
+    
+    # Capture in short bursts to show progress
+    start_time = time.time()
+    burst_duration = 1  # Update progress every 1 second
+    
+    while True:
+        elapsed = time.time() - start_time
+        remaining_time = duration - elapsed
+        
+        if remaining_time <= 0:
+            break
+        
+        # Update progress bar
+        progress = min(elapsed / duration, 1.0)
+        progress_bar.progress(progress)
+        
+        # Update status
+        status_text.info(f"🔴 **Capturing on {interface}...** {int(remaining_time)}s remaining")
+        stats_text.markdown(
+            f"📡 **Packets:** {packet_count[0]} | "
+            f"🔀 **Flows:** {len(flow_buffers)}"
+        )
+        
+        # Capture for a short burst
+        capture_time = min(burst_duration, remaining_time)
+        try:
+            sniff(iface=interface, prn=packet_callback, timeout=capture_time, store=False)
+        except Exception as e:
+            if "Permission" in str(e) or "Operation not permitted" in str(e):
+                raise PermissionError(str(e))
+            raise
+    
+    # Final progress update
+    progress_bar.progress(1.0)
+    status_text.success(f"✓ Capture complete!")
+    
+    # Convert buffers to images
+    images = []
+    flow_info = []
+    
+    for key, buffer in flow_buffers.items():
+        if max_flows and len(images) >= max_flows:
+            break
+        
+        if len(buffer) == 0:
+            continue
+        
+        # Convert to numpy array
+        arr = np.frombuffer(bytes(buffer), dtype=np.uint8)
+        
+        if len(arr) >= MAX_LEN:
+            arr = arr[:MAX_LEN]
+        else:
+            arr = np.pad(arr, (0, MAX_LEN - len(arr)))
+        
+        img = arr.reshape(ROWS, COLS)
+        images.append(img)
+        
+        flow_info.append({
+            'src': f"{key[0]}:{key[2]}",
+            'dst': f"{key[1]}:{key[3]}",
+            'proto': 'TCP' if key[4] == 6 else 'UDP' if key[4] == 17 else str(key[4]),
+            'bytes': len(buffer)
+        })
+    
+    return images, flow_info
 
 
 def capture_live_traffic(interface, duration, max_flows):
@@ -523,7 +672,7 @@ def capture_live_traffic(interface, duration, max_flows):
     flow_info = []
     
     for key, buffer in flow_buffers.items():
-        if len(images) >= max_flows:
+        if max_flows and len(images) >= max_flows:
             break
         
         if len(buffer) == 0:
@@ -552,7 +701,7 @@ def capture_live_traffic(interface, duration, max_flows):
 
 
 def display_capture_results(results):
-    """Display live capture results."""
+    """Display live capture results with enhanced visualizations."""
     
     images = results['images']
     flow_info = results['flow_info']
@@ -571,102 +720,175 @@ def display_capture_results(results):
     col2.metric("Non-VPN Traffic", nonvpn_count)
     col3.metric("VPN Traffic", vpn_count)
     
-    # Traffic type breakdown
-    st.markdown("### Traffic Type Distribution")
+    # =========================================================================
+    # CLASS DISTRIBUTION SECTION - Bar Chart (Flows per Class)
+    # =========================================================================
+    st.markdown("### 📊 Traffic Type Distribution")
     
-    # Count each class
     from collections import Counter
-    class_counts = Counter(preds)
-    
-    # Create bar chart
     import pandas as pd
-    df_counts = pd.DataFrame([
-        {"Class": CLASS_NAMES[cls], "Count": count, "VPN": "VPN" if cls >= 6 else "Non-VPN"}
-        for cls, count in sorted(class_counts.items())
-    ])
     
-    if not df_counts.empty:
-        fig, ax = plt.subplots(figsize=(10, 4))
-        colors = [CLASS_COLORS[cls] for cls in sorted(class_counts.keys())]
-        ax.bar(range(len(df_counts)), df_counts['Count'], color=colors)
-        ax.set_xticks(range(len(df_counts)))
-        ax.set_xticklabels(df_counts['Class'], rotation=45, ha='right')
-        ax.set_ylabel('Number of Flows')
-        ax.set_title('Traffic Classification Distribution')
+    class_counts = Counter(preds)
+    total = len(preds)
+    
+    col_chart, col_breakdown = st.columns([1.5, 1])
+    
+    with col_chart:
+        # Bar chart - Flows per Class
+        if class_counts:
+            fig, ax = plt.subplots(figsize=(12, 5))
+            sorted_classes = sorted(class_counts.keys(), key=lambda x: -class_counts[x])
+            x_labels = [CLASS_NAMES[cls] for cls in sorted_classes]
+            counts = [class_counts[cls] for cls in sorted_classes]
+            colors = [CLASS_COLORS[cls] for cls in sorted_classes]
+            
+            bars = ax.bar(range(len(counts)), counts, color=colors, edgecolor='black', linewidth=0.5)
+            ax.set_xticks(range(len(counts)))
+            ax.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=10)
+            ax.set_ylabel('Number of Flows', fontsize=11)
+            ax.set_xlabel('Traffic Class', fontsize=11)
+            ax.set_title('Flows per Class', fontsize=14, fontweight='bold')
+            
+            # Add count and percentage labels on bars
+            for bar, count in zip(bars, counts):
+                pct = 100 * count / total
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
+                       f'{count}\n({pct:.1f}%)', ha='center', va='bottom', fontsize=9)
+            
+            ax.set_ylim(0, max(counts) * 1.2)
+            ax.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+    
+    with col_breakdown:
+        # Detailed breakdown
+        st.markdown("**Breakdown Table:**")
+        breakdown_data = []
+        for cls in sorted(class_counts.keys(), key=lambda x: -class_counts[x]):
+            count = class_counts[cls]
+            pct = 100 * count / total
+            breakdown_data.append({
+                "Class": CLASS_NAMES[cls],
+                "Count": count,
+                "Percentage": f"{pct:.1f}%",
+                "Type": "VPN" if cls >= 6 else "Non-VPN"
+            })
+        
+        df_breakdown = pd.DataFrame(breakdown_data)
+        st.dataframe(df_breakdown, use_container_width=True, hide_index=True, height=250)
+    
+    # =========================================================================
+    # FLOW VISUALIZATIONS (GRAYSCALE)
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("🖼️ Flow Visualizations")
+    
+    # Controls
+    col_ctrl1, col_ctrl2 = st.columns(2)
+    with col_ctrl1:
+        n_display = st.slider("Flows to display", 4, min(40, len(images)), 
+                              min(16, len(images)), step=4, key="capture_n_display")
+    with col_ctrl2:
+        cols_per_row = st.selectbox("Columns", [4, 5, 6, 8], index=1, key="capture_cols")
+    
+    for row_start in range(0, n_display, cols_per_row):
+        cols = st.columns(cols_per_row)
+        for i, col in enumerate(cols):
+            idx = row_start + i
+            if idx < n_display:
+                with col:
+                    fig, ax = plt.subplots(figsize=(2, 2))
+                    ax.imshow(images[idx], cmap='gray', vmin=0, vmax=255)  # GRAYSCALE
+                    ax.axis('off')
+                    pred_name = CLASS_NAMES[preds[idx]]
+                    if len(pred_name) > 12:
+                        pred_name = pred_name[:10] + "..."
+                    conf = probs[idx][preds[idx]] * 100
+                    ax.set_title(f"#{idx+1}\n{pred_name}\n{conf:.0f}%", fontsize=7)
+                    st.pyplot(fig)
+                    plt.close()
+    
+    # =========================================================================
+    # CLASSIFICATION TABLE
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("📋 Classification Details")
+    
+    data = []
+    for i, (info, pred, prob) in enumerate(zip(flow_info, preds, probs)):
+        conf = prob[pred] * 100
+        is_vpn = "✓ VPN" if pred >= 6 else "✗ Non-VPN"
+        data.append({
+            "Flow #": i+1,
+            "Protocol": info['proto'],
+            "Bytes": info['bytes'],
+            "Prediction": CLASS_NAMES[pred],
+            "Confidence": f"{conf:.1f}%",
+            "VPN Status": is_vpn
+        })
+    
+    df = pd.DataFrame(data)
+    st.dataframe(df, use_container_width=True, hide_index=True, height=250)
+    
+    # =========================================================================
+    # INDIVIDUAL FLOW INSPECTOR
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("🔍 Individual Flow Inspector")
+    
+    selected_flow = st.selectbox(
+        "Select a flow to inspect",
+        range(len(images)),
+        format_func=lambda x: f"Flow {x+1} - {CLASS_NAMES[preds[x]]} ({probs[x][preds[x]]*100:.1f}%)",
+        key="capture_flow_selector"
+    )
+    
+    col_image, col_probs = st.columns([1, 2])
+    
+    with col_image:
+        st.markdown("**Flow Image (28×28)**")
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.imshow(images[selected_flow], cmap='gray', vmin=0, vmax=255)  # GRAYSCALE
+        ax.axis('off')
+        ax.set_title(f"Flow {selected_flow+1}", fontsize=12)
+        st.pyplot(fig)
+        plt.close()
+        
+        info = flow_info[selected_flow]
+        st.markdown(f"""
+        **Details:**
+        - Source: `{info['src']}`
+        - Dest: `{info['dst']}`
+        - Protocol: {info['proto']}
+        - Bytes: {info['bytes']}
+        """)
+    
+    with col_probs:
+        st.markdown("**Classification Probabilities**")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        y_pos = range(12)
+        bars = ax.barh(y_pos, probs[selected_flow], color=CLASS_COLORS)
+        bars[preds[selected_flow]].set_edgecolor('black')
+        bars[preds[selected_flow]].set_linewidth(3)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels([CLASS_NAMES[i] for i in range(12)], fontsize=10)
+        ax.set_xlabel('Probability')
+        ax.set_xlim(0, 1)
+        ax.axvline(x=0.5, color='gray', linestyle='--', alpha=0.5)
+        
+        for i, (bar, prob_val) in enumerate(zip(bars, probs[selected_flow])):
+            if prob_val > 0.05:
+                ax.text(prob_val + 0.02, bar.get_y() + bar.get_height()/2,
+                       f'{prob_val*100:.1f}%', va='center', fontsize=9)
+        
+        pred_class = CLASS_NAMES[preds[selected_flow]]
+        confidence = probs[selected_flow][preds[selected_flow]] * 100
+        ax.set_title(f'Prediction: {pred_class} ({confidence:.1f}%)', 
+                    fontsize=12, fontweight='bold')
         plt.tight_layout()
         st.pyplot(fig)
         plt.close()
-    
-    # Two columns: images and table
-    st.markdown("---")
-    col_img, col_table = st.columns([1, 1])
-    
-    with col_img:
-        st.subheader("Flow Visualizations")
-        
-        n_display = min(8, len(images))
-        cols_per_row = 4
-        
-        for row_start in range(0, n_display, cols_per_row):
-            cols = st.columns(cols_per_row)
-            for i, col in enumerate(cols):
-                idx = row_start + i
-                if idx < n_display:
-                    with col:
-                        fig, ax = plt.subplots(figsize=(2, 2))
-                        ax.imshow(images[idx], cmap='viridis', vmin=0, vmax=255)
-                        ax.axis('off')
-                        pred_name = CLASS_NAMES[preds[idx]]
-                        if len(pred_name) > 12:
-                            pred_name = pred_name[:10] + "..."
-                        ax.set_title(f"Flow {idx+1}\n{pred_name}", fontsize=8)
-                        st.pyplot(fig)
-                        plt.close()
-    
-    with col_table:
-        st.subheader("Classification Details")
-        
-        import pandas as pd
-        
-        data = []
-        for i, (info, pred, prob) in enumerate(zip(flow_info, preds, probs)):
-            conf = prob[pred] * 100
-            is_vpn = "✓ VPN" if pred >= 6 else "✗ Non-VPN"
-            data.append({
-                "Flow": f"Flow {i+1}",
-                "Protocol": info['proto'],
-                "Bytes": info['bytes'],
-                "Prediction": CLASS_NAMES[pred],
-                "Confidence": f"{conf:.1f}%",
-                "VPN": is_vpn
-            })
-        
-        df = pd.DataFrame(data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
-    
-    # Detailed probability view
-    st.markdown("---")
-    st.subheader("Detailed Probabilities")
-    
-    selected_flow = st.selectbox(
-        "Select a flow to see detailed probabilities",
-        range(len(images)),
-        format_func=lambda x: f"Flow {x+1} - {CLASS_NAMES[preds[x]]} ({probs[x][preds[x]]*100:.1f}%)"
-    )
-    
-    fig, ax = plt.subplots(figsize=(10, 5))
-    y_pos = range(12)
-    bars = ax.barh(y_pos, probs[selected_flow], color=CLASS_COLORS)
-    bars[preds[selected_flow]].set_edgecolor('black')
-    bars[preds[selected_flow]].set_linewidth(2)
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels([CLASS_NAMES[i] for i in range(12)])
-    ax.set_xlabel('Probability')
-    ax.set_xlim(0, 1)
-    ax.axvline(x=0.5, color='gray', linestyle='--', alpha=0.5)
-    ax.set_title(f'Flow {selected_flow+1} - Classification Probabilities')
-    st.pyplot(fig)
-    plt.close()
 
 
 def pcap_page(model, device):
@@ -683,9 +905,15 @@ def pcap_page(model, device):
     )
     
     # Settings
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
-        max_flows = st.slider("Maximum flows to process", 5, 100, 20)
+        process_all = st.checkbox("Process all flows", value=True, key="pcap_all_flows")
+    with col2:
+        if process_all:
+            st.info("All flows will be processed")
+            max_flows = None  # No limit
+        else:
+            max_flows = st.slider("Maximum flows", 5, 200, 50, key="pcap_max_flows")
     
     if uploaded_file is not None:
         # Process button
@@ -716,7 +944,7 @@ def pcap_page(model, device):
 
 
 def display_pcap_results(results):
-    """Display PCAP processing results."""
+    """Display PCAP processing results with enhanced visualizations."""
     
     images = results['images']
     flow_info = results['flow_info']
@@ -734,79 +962,185 @@ def display_pcap_results(results):
     col2.metric("Non-VPN", nonvpn_count)
     col3.metric("VPN", vpn_count)
     
+    # =========================================================================
+    # CLASS DISTRIBUTION SECTION - Bar Chart (Flows per Class)
+    # =========================================================================
     st.markdown("---")
+    st.subheader("📊 Class Distribution")
     
-    # Two columns: images and results table
-    col_img, col_table = st.columns([1, 1])
+    from collections import Counter
+    import pandas as pd
     
-    with col_img:
-        st.subheader("Flow Visualizations")
-        
-        # Show flow images in a grid
-        n_display = min(12, len(images))
-        cols_per_row = 4
-        
-        for row_start in range(0, n_display, cols_per_row):
-            cols = st.columns(cols_per_row)
-            for i, col in enumerate(cols):
-                idx = row_start + i
-                if idx < n_display:
-                    with col:
-                        fig, ax = plt.subplots(figsize=(2, 2))
-                        ax.imshow(images[idx], cmap='viridis', vmin=0, vmax=255)
-                        ax.axis('off')
-                        pred_name = CLASS_NAMES[preds[idx]]
-                        if len(pred_name) > 12:
-                            pred_name = pred_name[:10] + "..."
-                        ax.set_title(f"Flow {idx+1}\n{pred_name}", fontsize=8)
-                        st.pyplot(fig)
-                        plt.close()
+    class_counts = Counter(preds)
+    total = len(preds)
     
-    with col_table:
-        st.subheader("Classification Results")
+    col_chart, col_breakdown = st.columns([1.5, 1])
+    
+    with col_chart:
+        # Bar chart - Flows per Class
+        fig, ax = plt.subplots(figsize=(12, 5))
+        sorted_classes = sorted(class_counts.keys(), key=lambda x: -class_counts[x])
+        x_labels = [CLASS_NAMES[cls] for cls in sorted_classes]
+        counts = [class_counts[cls] for cls in sorted_classes]
+        colors = [CLASS_COLORS[cls] for cls in sorted_classes]
         
-        # Create results dataframe
-        import pandas as pd
+        bars = ax.bar(range(len(counts)), counts, color=colors, edgecolor='black', linewidth=0.5)
+        ax.set_xticks(range(len(counts)))
+        ax.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=10)
+        ax.set_ylabel('Number of Flows', fontsize=11)
+        ax.set_xlabel('Traffic Class', fontsize=11)
+        ax.set_title('Flows per Class', fontsize=14, fontweight='bold')
         
-        data = []
-        for i, (info, pred, prob) in enumerate(zip(flow_info, preds, probs)):
-            conf = prob[pred] * 100
-            is_vpn = "✓ VPN" if pred >= 6 else "✗ Non-VPN"
-            data.append({
-                "Flow": f"Flow {i+1}",
-                "Protocol": info['proto'],
-                "Prediction": CLASS_NAMES[pred],
-                "Confidence": f"{conf:.1f}%",
-                "VPN": is_vpn
+        # Add count and percentage labels on bars
+        for bar, count in zip(bars, counts):
+            pct = 100 * count / total
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
+                   f'{count}\n({pct:.1f}%)', ha='center', va='bottom', fontsize=9)
+        
+        ax.set_ylim(0, max(counts) * 1.2)  # Add space for labels
+        ax.grid(axis='y', alpha=0.3)
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
+    
+    with col_breakdown:
+        # Detailed breakdown table
+        st.markdown("**Breakdown Table:**")
+        
+        breakdown_data = []
+        for cls in sorted(class_counts.keys(), key=lambda x: -class_counts[x]):
+            count = class_counts[cls]
+            pct = 100 * count / total
+            is_vpn = "VPN" if cls >= 6 else "Non-VPN"
+            breakdown_data.append({
+                "Class": CLASS_NAMES[cls],
+                "Count": count,
+                "Percentage": f"{pct:.1f}%",
+                "Type": is_vpn
             })
         
-        df = pd.DataFrame(data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        df_breakdown = pd.DataFrame(breakdown_data)
+        st.dataframe(df_breakdown, use_container_width=True, hide_index=True, height=300)
     
-    # Detailed probability view for selected flow
+    # =========================================================================
+    # FLOW VISUALIZATIONS AND TABLE
+    # =========================================================================
     st.markdown("---")
-    st.subheader("Detailed Probabilities")
+    st.subheader("🖼️ Flow Visualizations")
+    
+    # Controls for visualization
+    col_ctrl1, col_ctrl2 = st.columns(2)
+    with col_ctrl1:
+        n_display = st.slider("Number of flows to display", 
+                              min_value=4, max_value=min(40, len(images)), 
+                              value=min(20, len(images)), step=4)
+    with col_ctrl2:
+        cols_per_row = st.selectbox("Columns per row", [4, 5, 6, 8], index=1)
+    
+    # Show flow images in a grid (GRAYSCALE)
+    for row_start in range(0, n_display, cols_per_row):
+        cols = st.columns(cols_per_row)
+        for i, col in enumerate(cols):
+            idx = row_start + i
+            if idx < n_display:
+                with col:
+                    fig, ax = plt.subplots(figsize=(2, 2))
+                    ax.imshow(images[idx], cmap='gray', vmin=0, vmax=255)  # GRAYSCALE
+                    ax.axis('off')
+                    pred_name = CLASS_NAMES[preds[idx]]
+                    if len(pred_name) > 12:
+                        pred_name = pred_name[:10] + "..."
+                    conf = probs[idx][preds[idx]] * 100
+                    ax.set_title(f"#{idx+1}\n{pred_name}\n{conf:.0f}%", fontsize=7)
+                    st.pyplot(fig)
+                    plt.close()
+    
+    # =========================================================================
+    # CLASSIFICATION TABLE
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("📋 Classification Results")
+    
+    import pandas as pd
+    
+    data = []
+    for i, (info, pred, prob) in enumerate(zip(flow_info, preds, probs)):
+        conf = prob[pred] * 100
+        is_vpn = "✓ VPN" if pred >= 6 else "✗ Non-VPN"
+        data.append({
+            "Flow #": i+1,
+            "Protocol": info['proto'],
+            "Bytes": info['bytes'],
+            "Prediction": CLASS_NAMES[pred],
+            "Confidence": f"{conf:.1f}%",
+            "VPN Status": is_vpn
+        })
+    
+    df = pd.DataFrame(data)
+    st.dataframe(df, use_container_width=True, hide_index=True, height=300)
+    
+    # =========================================================================
+    # INDIVIDUAL FLOW VIEWER (NEW)
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("🔍 Individual Flow Inspector")
     
     selected_flow = st.selectbox(
-        "Select a flow to see detailed probabilities",
+        "Select a flow to inspect in detail",
         range(len(images)),
-        format_func=lambda x: f"Flow {x+1} - {CLASS_NAMES[preds[x]]}"
+        format_func=lambda x: f"Flow {x+1} - {CLASS_NAMES[preds[x]]} ({probs[x][preds[x]]*100:.1f}%)",
+        key="pcap_flow_selector"
     )
     
-    # Show probability bar chart
-    fig, ax = plt.subplots(figsize=(10, 5))
-    y_pos = range(12)
-    bars = ax.barh(y_pos, probs[selected_flow], color=CLASS_COLORS)
-    bars[preds[selected_flow]].set_edgecolor('black')
-    bars[preds[selected_flow]].set_linewidth(2)
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels([CLASS_NAMES[i] for i in range(12)])
-    ax.set_xlabel('Probability')
-    ax.set_xlim(0, 1)
-    ax.axvline(x=0.5, color='gray', linestyle='--', alpha=0.5)
-    ax.set_title(f'Flow {selected_flow+1} Classification Probabilities')
-    st.pyplot(fig)
-    plt.close()
+    col_image, col_probs = st.columns([1, 2])
+    
+    with col_image:
+        # Large flow image (GRAYSCALE)
+        st.markdown("**Flow Image (28×28 bytes)**")
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.imshow(images[selected_flow], cmap='gray', vmin=0, vmax=255)
+        ax.axis('off')
+        ax.set_title(f"Flow {selected_flow+1}", fontsize=14)
+        st.pyplot(fig)
+        plt.close()
+        
+        # Flow info
+        info = flow_info[selected_flow]
+        st.markdown(f"""
+        **Flow Details:**
+        - **Source:** {info['src']}
+        - **Destination:** {info['dst']}
+        - **Protocol:** {info['proto']}
+        - **Bytes captured:** {info['bytes']}
+        """)
+    
+    with col_probs:
+        # Probability bar chart
+        st.markdown("**Classification Probabilities**")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        y_pos = range(12)
+        bars = ax.barh(y_pos, probs[selected_flow], color=CLASS_COLORS)
+        bars[preds[selected_flow]].set_edgecolor('black')
+        bars[preds[selected_flow]].set_linewidth(3)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels([CLASS_NAMES[i] for i in range(12)], fontsize=10)
+        ax.set_xlabel('Probability', fontsize=11)
+        ax.set_xlim(0, 1)
+        ax.axvline(x=0.5, color='gray', linestyle='--', alpha=0.5)
+        
+        # Add probability labels
+        for i, (bar, prob_val) in enumerate(zip(bars, probs[selected_flow])):
+            if prob_val > 0.05:
+                ax.text(prob_val + 0.02, bar.get_y() + bar.get_height()/2,
+                       f'{prob_val*100:.1f}%', va='center', fontsize=9)
+        
+        pred_class = CLASS_NAMES[preds[selected_flow]]
+        confidence = probs[selected_flow][preds[selected_flow]] * 100
+        ax.set_title(f'Prediction: {pred_class} ({confidence:.1f}%)', 
+                    fontsize=12, fontweight='bold')
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
 
 
 def dataset_page(model, device):
@@ -961,7 +1295,7 @@ def display_eval_results(dataset, results):
             for j in range(samples_per_class):
                 ax = axes[i, j] if len(unique_labels) > 1 else axes[j]
                 if j < len(class_images):
-                    ax.imshow(class_images[j], cmap='viridis', vmin=0, vmax=255)
+                    ax.imshow(class_images[j], cmap='gray', vmin=0, vmax=255)
                 ax.axis('off')
                 if j == 0:
                     name = CLASS_NAMES.get(label, str(label))

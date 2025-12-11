@@ -2,16 +2,19 @@
 
 A comprehensive demonstration system for the AttentionNet network traffic classifier.
 
-## Three Demo Options
+## Four Demo Options
 
-### Option 1: Streamlit Web App (`demo_streamlit.py`) ⭐ RECOMMENDED
-Beautiful web interface that runs in your browser. No Tkinter needed!
+### Option 1: Streamlit Web App (`demo_streamlit.py`)
+Beautiful web interface that runs in your browser. No desktop GUI dependencies.
 
-### Option 2: CLI Application (`demo_cli.py`)
+### Option 2: PyQt6 Desktop App (`demo_pyqt.py`) ⭐ NEW
+Professional desktop GUI with native look. Works with pyenv (no Tkinter issues)!
+
+### Option 3: CLI Application (`demo_cli.py`)
 Command-line interface - works everywhere, no GUI dependencies.
 
-### Option 3: Tkinter GUI (`demo_app.py`)
-Full desktop GUI - requires Tkinter (may need extra setup on macOS).
+### Option 4: Tkinter GUI (`demo_app.py`)
+Desktop GUI - requires Tkinter (may need extra setup on macOS with pyenv).
 
 ## Features
 
@@ -30,29 +33,41 @@ pip install torch numpy scikit-learn matplotlib scapy streamlit pandas
 
 ## Usage
 
-### Option 1: Streamlit Web App ⭐ RECOMMENDED
+### Option 1: Streamlit Web App
 
 ```bash
-cd /Users/kivanc/Desktop/AttentionNet/demo
-streamlit run demo_streamlit.py
+cd /Users/kivanc/Desktop/AttentionNet
+source venv/bin/activate
+streamlit run demo/demo_streamlit.py
 ```
 
-This opens a browser window with the demo. Features:
-- 📁 Process PCAP files
-- 📊 Evaluate test datasets
-- ℹ️ View model architecture
+Opens a browser window with the demo.
 
-### Option 2: CLI Application
+### Option 2: PyQt6 Desktop App ⭐ RECOMMENDED
 
 ```bash
-cd /Users/kivanc/Desktop/AttentionNet/demo
-python demo_cli.py
+cd /Users/kivanc/Desktop/AttentionNet
+source venv/bin/activate
+python demo/demo_pyqt.py
 ```
 
-### Option 3: Tkinter GUI (if Tkinter is available)
+Opens a native desktop window. For live capture:
+```bash
+sudo python demo/demo_pyqt.py
+```
+
+### Option 3: CLI Application
 
 ```bash
-python demo_app.py
+cd /Users/kivanc/Desktop/AttentionNet
+source venv/bin/activate
+python demo/demo_cli.py
+```
+
+### Option 4: Tkinter GUI (if Tkinter is available)
+
+```bash
+python demo/demo_app.py
 ```
 
 ### Fixing Tkinter on macOS with pyenv
