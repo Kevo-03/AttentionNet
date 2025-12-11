@@ -1,13 +1,15 @@
 """
 AttentionNet Traffic Classifier - Streamlit Demo
 =================================================
-A simple, clean web interface for demonstrating the traffic classifier.
+A web interface for demonstrating the network traffic classifier.
 
 Run with:
-    streamlit run demo_streamlit.py
+    cd /path/to/AttentionNet
+    streamlit run demo/demo_streamlit.py
 
-The code is intentionally simple and well-commented so you can
-easily understand and explain each part to your professor.
+Structure:
+- Model architecture imported from src/model/hybrid_tiny.py
+- Preprocessing helpers defined locally for modularity
 """
 
 import os
@@ -18,7 +20,6 @@ from datetime import datetime
 
 import numpy as np
 import torch
-import torch.nn as nn
 import streamlit as st
 import matplotlib.pyplot as plt
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
@@ -35,16 +36,162 @@ st.set_page_config(
 )
 
 # =============================================================================
-# PATHS AND CONSTANTS
+# PATHS AND MODEL IMPORT
 # =============================================================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
+# Add src/ to path for model import
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
+
+# Import model architecture (shared with training code)
+from model.hybrid_tiny import TrafficCNN_TinyTransformer
+
 MODEL_PATH = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/2layer_cnn_hybrid_3fc/best_model.pth")
 TEST_DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2/ratio_change")
 
-MAX_LEN = 784  # 28x28 = 784 bytes per flow image
-ROWS, COLS = 28, 28
+# =============================================================================
+# PREPROCESSING CONSTANTS
+# =============================================================================
+MAX_LEN = 784   # 28 x 28 = 784 bytes per flow image
+ROWS = 28
+COLS = 28
+
+# =============================================================================
+# PREPROCESSING HELPERS
+# These functions handle packet processing for flow extraction
+# =============================================================================
+
+def flow_key(pkt):
+    """
+    Create a bidirectional flow identifier from a packet.
+    
+    Groups packets by IP addresses and ports, sorted to make the flow
+    bidirectional (A->B and B->A are the same flow).
+    
+    Args:
+        pkt: Scapy packet with IP layer
+        
+    Returns:
+        tuple: (ip1, ip2, port1, port2, protocol)
+    """
+    from scapy.all import IP, TCP, UDP
+    
+    ip = pkt[IP]
+    proto = ip.proto
+    sport = pkt[TCP].sport if TCP in pkt else pkt[UDP].sport if UDP in pkt else 0
+    dport = pkt[TCP].dport if TCP in pkt else pkt[UDP].dport if UDP in pkt else 0
+    
+    # Sort to make flow bidirectional
+    sorted_ips = tuple(sorted((ip.src, ip.dst)))
+    sorted_ports = tuple(sorted((sport, dport)))
+    
+    return (sorted_ips[0], sorted_ips[1], sorted_ports[0], sorted_ports[1], proto)
+
+
+def anonymize_packet(pkt):
+    """
+    Anonymize a packet by zeroing out IP and MAC addresses.
+    
+    This ensures the model doesn't learn from specific IP addresses,
+    making it generalize better to new networks.
+    
+    Args:
+        pkt: Scapy packet
+        
+    Returns:
+        bytes: Anonymized packet bytes
+    """
+    from scapy.all import IP
+    
+    pkt_copy = pkt.copy()
+    pkt_copy[IP].src = "0.0.0.0"
+    pkt_copy[IP].dst = "0.0.0.0"
+    
+    if "Ether" in pkt_copy:
+        pkt_copy["Ether"].src = "00:00:00:00:00:00"
+        pkt_copy["Ether"].dst = "00:00:00:00:00:00"
+    
+    return bytes(pkt_copy)
+
+
+def is_corrupted(pkt):
+    """
+    Check if a packet is corrupted or invalid.
+    
+    Args:
+        pkt: Scapy packet
+        
+    Returns:
+        bool: True if packet is corrupted
+    """
+    from scapy.all import IP
+    
+    try:
+        if IP not in pkt:
+            return True
+        if len(bytes(pkt)) == 0:
+            return True
+        return False
+    except Exception:
+        return True
+
+
+def is_retransmission(pkt, seq_tracker):
+    """
+    Check if a TCP packet is a retransmission.
+    
+    Retransmissions have the same sequence number as a previous packet.
+    We skip them to avoid duplicate data in the flow.
+    
+    Args:
+        pkt: Scapy packet
+        seq_tracker: dict tracking seen sequence numbers per connection
+        
+    Returns:
+        bool: True if packet is a retransmission
+    """
+    from scapy.all import IP, TCP
+    
+    if TCP not in pkt:
+        return False
+    
+    tcp = pkt[TCP]
+    ip = pkt[IP]
+    conn_key = (ip.src, ip.dst, tcp.sport, tcp.dport)
+    seq = tcp.seq
+    
+    seen = seq_tracker[conn_key]
+    if seq in seen:
+        return True
+    seen.add(seq)
+    return False
+
+
+def bytes_to_image(buffer):
+    """
+    Convert a byte buffer to a 28x28 grayscale image.
+    
+    Pads with zeros if buffer is shorter than 784 bytes,
+    truncates if longer.
+    
+    Args:
+        buffer: bytes or bytearray
+        
+    Returns:
+        numpy.ndarray: 28x28 uint8 array, or None if empty
+    """
+    if len(buffer) == 0:
+        return None
+    
+    arr = np.frombuffer(buffer if isinstance(buffer, bytes) else bytes(buffer), dtype=np.uint8)
+    
+    if len(arr) >= MAX_LEN:
+        arr = arr[:MAX_LEN]
+    else:
+        arr = np.pad(arr, (0, MAX_LEN - len(arr)), "constant", constant_values=0)
+    
+    return arr.reshape(ROWS, COLS)
 
 # Class names for the 12 traffic categories
 CLASS_NAMES = {
@@ -69,104 +216,8 @@ CLASS_COLORS = [
 ]
 
 # =============================================================================
-# MODEL DEFINITION
-# This is the same hybrid CNN-Transformer architecture used for training
-# =============================================================================
-class TrafficCNN_TinyTransformer(nn.Module):
-    """
-    Hybrid CNN-Transformer model for traffic classification.
-    
-    Architecture:
-    1. CNN backbone: Extracts spatial features from 28x28 images
-       - Conv1: 1 -> 64 channels, 3x3 kernel
-       - Conv2: 64 -> 128 channels, 3x3 kernel
-       
-    2. Transformer: Learns relationships between different parts of the flow
-       - 2 encoder layers
-       - 4 attention heads
-       
-    3. Classifier: Three fully-connected layers for final prediction
-    """
-    
-    def __init__(self, num_classes=12):
-        super().__init__()
-        
-        # CNN layers - extract features from the image
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.pool1 = nn.MaxPool2d(2, 2)  # 28x28 -> 14x14
-        
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(128)
-        self.pool2 = nn.MaxPool2d(2, 2)  # 14x14 -> 7x7
-        
-        self.relu = nn.ReLU(inplace=True)
-        
-        # Transformer parameters
-        self.d_model = 128  # Embedding dimension
-        self.seq_len = 49   # 7x7 = 49 tokens
-        
-        # Learnable position embeddings
-        self.pos_embedding = nn.Parameter(torch.randn(1, self.seq_len, self.d_model))
-        
-        # Layer normalization
-        self.norm_in = nn.LayerNorm(self.d_model)
-        self.norm_out = nn.LayerNorm(self.d_model)
-        
-        # Transformer encoder
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=self.d_model,
-            nhead=4,              # 4 attention heads
-            dim_feedforward=256,  # FFN hidden dimension
-            dropout=0.1,
-            activation="gelu",
-            batch_first=True
-        )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=2)
-        
-        # Classifier with dropout for regularization
-        self.dropout1 = nn.Dropout(0.5)
-        self.dropout2 = nn.Dropout(0.3)
-        self.dropout3 = nn.Dropout(0.2)
-        
-        self.fc1 = nn.Linear(self.d_model, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, num_classes)
-
-    def forward(self, x):
-        # CNN feature extraction
-        x = self.relu(self.bn1(self.conv1(x)))
-        x = self.pool1(x)
-        x = self.relu(self.bn2(self.conv2(x)))
-        x = self.pool2(x)
-        
-        # Reshape for transformer: (batch, 128, 7, 7) -> (batch, 49, 128)
-        x = x.flatten(2).permute(0, 2, 1)
-        
-        # Add position embeddings
-        x = x + self.pos_embedding[:, :x.size(1), :]
-        
-        # Transformer processing
-        x = self.norm_in(x)
-        x = self.transformer(x)
-        x = self.norm_out(x)
-        
-        # Global average pooling over sequence
-        x = x.mean(dim=1)
-        
-        # Classification head
-        x = self.dropout1(x)
-        x = self.relu(self.fc1(x))
-        x = self.dropout2(x)
-        x = self.relu(self.fc2(x))
-        x = self.dropout3(x)
-        x = self.fc3(x)
-        
-        return x
-
-
-# =============================================================================
 # HELPER FUNCTIONS
+# Note: Model class is imported from src/model/hybrid_tiny.py
 # =============================================================================
 
 @st.cache_resource  # Cache the model so it's only loaded once
@@ -217,14 +268,16 @@ def predict_batch(model, device, images):
     return preds, probs
 
 
-def process_pcap_bytes(pcap_bytes, max_flows=50):
+def process_pcap_bytes(pcap_bytes, max_flows=None):
     """
     Process uploaded PCAP file and extract flow images.
     
-    This function:
-    1. Groups packets into flows by IP/port pairs
-    2. Anonymizes IP and MAC addresses
-    3. Converts first 784 bytes of each flow to a 28x28 image
+    Uses helper functions from src/preprocess/preprocess_memory_safe.py:
+    - flow_key: Create bidirectional flow identifier
+    - anonymize_packet: Zero out IPs and MACs
+    - is_corrupted: Check for corrupted packets
+    - is_retransmission: Skip TCP retransmissions
+    - bytes_to_image: Convert buffer to 28x28 image
     """
     try:
         from scapy.all import IP, TCP, UDP, PcapReader
@@ -243,43 +296,27 @@ def process_pcap_bytes(pcap_bytes, max_flows=50):
     try:
         with PcapReader(tmp_path) as packets:
             for pkt in packets:
-                # Only process IP packets with TCP or UDP
+                # Skip corrupted or non-IP/TCP/UDP packets (using imported helper)
+                if is_corrupted(pkt):
+                    continue
                 if IP not in pkt or (TCP not in pkt and UDP not in pkt):
                     continue
                 
-                # Create flow key from IP addresses and ports
-                ip = pkt[IP]
-                proto = ip.proto
-                sport = pkt[TCP].sport if TCP in pkt else pkt[UDP].sport if UDP in pkt else 0
-                dport = pkt[TCP].dport if TCP in pkt else pkt[UDP].dport if UDP in pkt else 0
+                # Skip retransmissions (using imported helper)
+                if is_retransmission(pkt, seq_tracker):
+                    continue
                 
-                # Sort to make flow bidirectional
-                sorted_ips = tuple(sorted((ip.src, ip.dst)))
-                sorted_ports = tuple(sorted((sport, dport)))
-                key = (sorted_ips[0], sorted_ips[1], sorted_ports[0], sorted_ports[1], proto)
-                
-                # Skip TCP retransmissions
-                if TCP in pkt:
-                    conn_key = (ip.src, ip.dst, pkt[TCP].sport, pkt[TCP].dport)
-                    seq = pkt[TCP].seq
-                    if seq in seq_tracker[conn_key]:
-                        continue
-                    seq_tracker[conn_key].add(seq)
-                
-                # Only add bytes if we haven't reached the limit
+                # Get flow key (using imported helper)
+                key = flow_key(pkt)
                 buffer = flow_buffers[key]
                 if len(buffer) >= MAX_LEN:
                     continue
                 
-                # Anonymize packet (zero out IPs and MACs)
-                pkt_copy = pkt.copy()
-                pkt_copy[IP].src = "0.0.0.0"
-                pkt_copy[IP].dst = "0.0.0.0"
-                if "Ether" in pkt_copy:
-                    pkt_copy["Ether"].src = "00:00:00:00:00:00"
-                    pkt_copy["Ether"].dst = "00:00:00:00:00:00"
+                # Anonymize and get bytes (using imported helper)
+                pkt_bytes = anonymize_packet(pkt)
+                if not pkt_bytes:
+                    continue
                 
-                pkt_bytes = bytes(pkt_copy)
                 remaining = MAX_LEN - len(buffer)
                 buffer.extend(pkt_bytes[:remaining])
     finally:
@@ -293,20 +330,11 @@ def process_pcap_bytes(pcap_bytes, max_flows=50):
         if max_flows and len(images) >= max_flows:
             break
         
-        if len(buffer) == 0:
+        # Convert to image (using imported helper)
+        img = bytes_to_image(bytes(buffer))
+        if img is None:
             continue
         
-        # Convert bytes to numpy array
-        arr = np.frombuffer(bytes(buffer), dtype=np.uint8)
-        
-        # Pad or truncate to exactly 784 bytes
-        if len(arr) >= MAX_LEN:
-            arr = arr[:MAX_LEN]
-        else:
-            arr = np.pad(arr, (0, MAX_LEN - len(arr)))
-        
-        # Reshape to 28x28 image
-        img = arr.reshape(ROWS, COLS)
         images.append(img)
         
         flow_info.append({
@@ -478,17 +506,11 @@ def capture_live_traffic_with_progress(interface, duration, max_flows, progress_
     """
     Capture live network traffic with progress updates.
     
-    Args:
-        interface: Network interface name (e.g., 'en0')
-        duration: Capture duration in seconds
-        max_flows: Maximum number of flows to return (None for unlimited)
-        progress_bar: Streamlit progress bar widget
-        status_text: Streamlit placeholder for status message
-        stats_text: Streamlit placeholder for stats
-    
-    Returns:
-        images: List of 28x28 numpy arrays
-        flow_info: List of flow metadata dicts
+    Uses helper functions from src/preprocess/preprocess_memory_safe.py:
+    - flow_key: Create bidirectional flow identifier
+    - anonymize_packet: Zero out IPs and MACs
+    - is_retransmission: Skip TCP retransmissions
+    - bytes_to_image: Convert buffer to 28x28 image
     """
     import time
     from scapy.all import sniff, IP, TCP, UDP
@@ -498,44 +520,27 @@ def capture_live_traffic_with_progress(interface, duration, max_flows, progress_
     packet_count = [0]  # Use list for mutable counter in nested function
     
     def packet_callback(pkt):
-        """Process each captured packet."""
+        """Process each captured packet using imported helpers."""
         if IP not in pkt or (TCP not in pkt and UDP not in pkt):
             return
         
         packet_count[0] += 1
         
-        # Create flow key
-        ip = pkt[IP]
-        proto = ip.proto
-        sport = pkt[TCP].sport if TCP in pkt else pkt[UDP].sport if UDP in pkt else 0
-        dport = pkt[TCP].dport if TCP in pkt else pkt[UDP].dport if UDP in pkt else 0
+        # Skip retransmissions (using imported helper)
+        if is_retransmission(pkt, seq_tracker):
+            return
         
-        sorted_ips = tuple(sorted((ip.src, ip.dst)))
-        sorted_ports = tuple(sorted((sport, dport)))
-        key = (sorted_ips[0], sorted_ips[1], sorted_ports[0], sorted_ports[1], proto)
-        
-        # Skip retransmissions
-        if TCP in pkt:
-            conn_key = (ip.src, ip.dst, pkt[TCP].sport, pkt[TCP].dport)
-            seq = pkt[TCP].seq
-            if seq in seq_tracker[conn_key]:
-                return
-            seq_tracker[conn_key].add(seq)
-        
-        # Add bytes to flow buffer
+        # Get flow key (using imported helper)
+        key = flow_key(pkt)
         buffer = flow_buffers[key]
         if len(buffer) >= MAX_LEN:
             return
         
-        # Anonymize packet
-        pkt_copy = pkt.copy()
-        pkt_copy[IP].src = "0.0.0.0"
-        pkt_copy[IP].dst = "0.0.0.0"
-        if "Ether" in pkt_copy:
-            pkt_copy["Ether"].src = "00:00:00:00:00:00"
-            pkt_copy["Ether"].dst = "00:00:00:00:00:00"
+        # Anonymize and get bytes (using imported helper)
+        pkt_bytes = anonymize_packet(pkt)
+        if not pkt_bytes:
+            return
         
-        pkt_bytes = bytes(pkt_copy)
         remaining = MAX_LEN - len(buffer)
         buffer.extend(pkt_bytes[:remaining])
     
@@ -582,18 +587,11 @@ def capture_live_traffic_with_progress(interface, duration, max_flows, progress_
         if max_flows and len(images) >= max_flows:
             break
         
-        if len(buffer) == 0:
+        # Convert to image (using imported helper)
+        img = bytes_to_image(bytes(buffer))
+        if img is None:
             continue
         
-        # Convert to numpy array
-        arr = np.frombuffer(bytes(buffer), dtype=np.uint8)
-        
-        if len(arr) >= MAX_LEN:
-            arr = arr[:MAX_LEN]
-        else:
-            arr = np.pad(arr, (0, MAX_LEN - len(arr)))
-        
-        img = arr.reshape(ROWS, COLS)
         images.append(img)
         
         flow_info.append({
@@ -610,14 +608,7 @@ def capture_live_traffic(interface, duration, max_flows):
     """
     Capture live network traffic and convert to flow images.
     
-    Args:
-        interface: Network interface name (e.g., 'en0')
-        duration: Capture duration in seconds
-        max_flows: Maximum number of flows to return
-    
-    Returns:
-        images: List of 28x28 numpy arrays
-        flow_info: List of flow metadata dicts
+    Uses helper functions from src/preprocess/preprocess_memory_safe.py
     """
     from scapy.all import sniff, IP, TCP, UDP
     
@@ -625,42 +616,25 @@ def capture_live_traffic(interface, duration, max_flows):
     seq_tracker = defaultdict(set)
     
     def packet_callback(pkt):
-        """Process each captured packet."""
+        """Process each captured packet using imported helpers."""
         if IP not in pkt or (TCP not in pkt and UDP not in pkt):
             return
         
-        # Create flow key
-        ip = pkt[IP]
-        proto = ip.proto
-        sport = pkt[TCP].sport if TCP in pkt else pkt[UDP].sport if UDP in pkt else 0
-        dport = pkt[TCP].dport if TCP in pkt else pkt[UDP].dport if UDP in pkt else 0
+        # Skip retransmissions (using imported helper)
+        if is_retransmission(pkt, seq_tracker):
+            return
         
-        sorted_ips = tuple(sorted((ip.src, ip.dst)))
-        sorted_ports = tuple(sorted((sport, dport)))
-        key = (sorted_ips[0], sorted_ips[1], sorted_ports[0], sorted_ports[1], proto)
-        
-        # Skip retransmissions
-        if TCP in pkt:
-            conn_key = (ip.src, ip.dst, pkt[TCP].sport, pkt[TCP].dport)
-            seq = pkt[TCP].seq
-            if seq in seq_tracker[conn_key]:
-                return
-            seq_tracker[conn_key].add(seq)
-        
-        # Add bytes to flow buffer
+        # Get flow key (using imported helper)
+        key = flow_key(pkt)
         buffer = flow_buffers[key]
         if len(buffer) >= MAX_LEN:
             return
         
-        # Anonymize packet
-        pkt_copy = pkt.copy()
-        pkt_copy[IP].src = "0.0.0.0"
-        pkt_copy[IP].dst = "0.0.0.0"
-        if "Ether" in pkt_copy:
-            pkt_copy["Ether"].src = "00:00:00:00:00:00"
-            pkt_copy["Ether"].dst = "00:00:00:00:00:00"
+        # Anonymize and get bytes (using imported helper)
+        pkt_bytes = anonymize_packet(pkt)
+        if not pkt_bytes:
+            return
         
-        pkt_bytes = bytes(pkt_copy)
         remaining = MAX_LEN - len(buffer)
         buffer.extend(pkt_bytes[:remaining])
     
@@ -675,19 +649,11 @@ def capture_live_traffic(interface, duration, max_flows):
         if max_flows and len(images) >= max_flows:
             break
         
-        if len(buffer) == 0:
+        # Convert to image (using imported helper)
+        img = bytes_to_image(bytes(buffer))
+        if img is None:
             continue
         
-        # Convert to numpy array
-        arr = np.frombuffer(bytes(buffer), dtype=np.uint8)
-        
-        # Pad or truncate
-        if len(arr) >= MAX_LEN:
-            arr = arr[:MAX_LEN]
-        else:
-            arr = np.pad(arr, (0, MAX_LEN - len(arr)))
-        
-        img = arr.reshape(ROWS, COLS)
         images.append(img)
         
         flow_info.append({
