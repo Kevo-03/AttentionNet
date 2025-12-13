@@ -29,8 +29,7 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score
 # This must be the first Streamlit command
 # =============================================================================
 st.set_page_config(
-    page_title="AttentionNet Traffic Classifier",
-    page_icon="🔍",
+    page_title="AttentionNet Traffic Classifier",  # Network globe icon
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -353,28 +352,28 @@ def process_pcap_bytes(pcap_bytes, max_flows=None):
 
 def main():
     # Sidebar navigation
-    st.sidebar.title("🔍 AttentionNet")
+    st.sidebar.title("AttentionNet")
     st.sidebar.markdown("Network Traffic Classifier")
     
     page = st.sidebar.radio(
         "Select Mode",
-        ["🔴 Live Capture", "📁 Process PCAP", "📊 Evaluate Dataset", "ℹ️ About Model"]
+        ["Live Capture & Classification", "Pre-captured Traffic (PCAP) Classification & Analysis", "Preprocessed Traffic Data Classification & Analysis", "About AttentionNet"]
     )
     
     # Load model (cached)
     try:
         model, device = load_model()
-        st.sidebar.success(f"✓ Model loaded ({device})")
+        st.sidebar.success(f"Model loaded ({device})")
     except Exception as e:
-        st.sidebar.error(f"✗ Model error: {e}")
+        st.sidebar.error(f"Model error: {e}")
         st.stop()
     
     # Route to selected page
-    if page == "🔴 Live Capture":
+    if page == "Live Capture & Classification":
         capture_page(model, device)
-    elif page == "📁 Process PCAP":
+    elif page == "Pre-captured Traffic (PCAP) Classification & Analysis":
         pcap_page(model, device)
-    elif page == "📊 Evaluate Dataset":
+    elif page == "Preprocessed Traffic Data Classification & Analysis":
         dataset_page(model, device)
     else:
         about_page()
@@ -383,7 +382,7 @@ def main():
 def capture_page(model, device):
     """Live network capture page."""
     
-    st.title("🔴 Live Network Capture")
+    st.title("Live Capture & Classification")
     st.markdown("Capture live network traffic and classify it in real-time.")
     
     # Check if scapy is available
@@ -394,18 +393,11 @@ def capture_page(model, device):
         scapy_available = False
     
     if not scapy_available:
-        st.error("⚠️ Scapy is required for live capture. Install with: `pip install scapy`")
+        st.error("Scapy is required for live capture. Install with: `pip install scapy`")
         return
     
-    # Warning about permissions
-    st.warning("""
-    **Note:** Live capture requires administrator/root privileges.
-    - **macOS/Linux:** Run with `sudo streamlit run demo_streamlit.py`
-    - **Windows:** Run as Administrator
-    """)
-    
     # Capture settings
-    st.subheader("⚙️ Capture Settings")
+    st.subheader("Capture Settings")
     col1, col2 = st.columns(2)
     
     with col1:
@@ -438,7 +430,7 @@ def capture_page(model, device):
             )
     
     # Common interfaces help
-    with st.expander("ℹ️ Common interface names"):
+    with st.expander("Common interface names"):
         st.markdown("""
         | OS | Interface | Description |
         |----|-----------|-------------|
@@ -450,7 +442,7 @@ def capture_page(model, device):
     
     # Capture button
     st.markdown("---")
-    if st.button("🔴 Start Capture", type="primary", use_container_width=True):
+    if st.button("Start Capture", type="primary", use_container_width=True):
         
         # Create placeholders for live updates
         progress_bar = st.progress(0)
@@ -469,11 +461,7 @@ def capture_page(model, device):
             stats_text.empty()
             
         except PermissionError:
-            st.error("""
-            **Permission denied!** Live capture requires root/admin privileges.
-            
-            Run with: `sudo streamlit run demo_streamlit.py`
-            """)
+            st.error("**Permission denied!** Live capture requires administrator privileges.")
             return
         except Exception as e:
             st.error(f"Capture error: {e}")
@@ -495,7 +483,7 @@ def capture_page(model, device):
             'probs': probs
         }
         
-        st.success(f"✓ Captured and classified {len(images)} flows!")
+        st.success(f"Captured and classified {len(images)} flows!")
     
     # Display results if available
     if 'capture_results' in st.session_state:
@@ -560,10 +548,10 @@ def capture_live_traffic_with_progress(interface, duration, max_flows, progress_
         progress_bar.progress(progress)
         
         # Update status
-        status_text.info(f"🔴 **Capturing on {interface}...** {int(remaining_time)}s remaining")
+        status_text.info(f"**Capturing on {interface}...** {int(remaining_time)}s remaining")
         stats_text.markdown(
-            f"📡 **Packets:** {packet_count[0]} | "
-            f"🔀 **Flows:** {len(flow_buffers)}"
+            f"**Packets:** {packet_count[0]} | "
+            f"**Flows:** {len(flow_buffers)}"
         )
         
         # Capture for a short burst
@@ -577,7 +565,7 @@ def capture_live_traffic_with_progress(interface, duration, max_flows, progress_
     
     # Final progress update
     progress_bar.progress(1.0)
-    status_text.success(f"✓ Capture complete!")
+    status_text.success(f"Capture complete!")
     
     # Convert buffers to images
     images = []
@@ -679,7 +667,7 @@ def display_capture_results(results):
     nonvpn_count = len(preds) - vpn_count
     
     st.markdown("---")
-    st.subheader("📊 Capture Results")
+    st.subheader("Capture Results")
     
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Flows", len(preds))
@@ -689,7 +677,7 @@ def display_capture_results(results):
     # =========================================================================
     # CLASS DISTRIBUTION SECTION - Bar Chart (Flows per Class)
     # =========================================================================
-    st.markdown("### 📊 Traffic Type Distribution")
+    st.markdown("### Traffic Type Distribution")
     
     from collections import Counter
     import pandas as pd
@@ -748,7 +736,7 @@ def display_capture_results(results):
     # FLOW VISUALIZATIONS (GRAYSCALE)
     # =========================================================================
     st.markdown("---")
-    st.subheader("🖼️ Flow Visualizations")
+    st.subheader("Flow Visualizations")
     
     # Controls
     col_ctrl1, col_ctrl2 = st.columns(2)
@@ -784,7 +772,7 @@ def display_capture_results(results):
     data = []
     for i, (info, pred, prob) in enumerate(zip(flow_info, preds, probs)):
         conf = prob[pred] * 100
-        is_vpn = "✓ VPN" if pred >= 6 else "✗ Non-VPN"
+        is_vpn = "VPN" if pred >= 6 else "Non-VPN"
         data.append({
             "Flow #": i+1,
             "Protocol": info['proto'],
@@ -801,7 +789,7 @@ def display_capture_results(results):
     # INDIVIDUAL FLOW INSPECTOR
     # =========================================================================
     st.markdown("---")
-    st.subheader("🔍 Individual Flow Inspector")
+    st.subheader("Individual Flow Inspector")
     
     selected_flow = st.selectbox(
         "Select a flow to inspect",
@@ -860,7 +848,7 @@ def display_capture_results(results):
 def pcap_page(model, device):
     """PCAP file processing page."""
     
-    st.title("📁 Process PCAP File")
+    st.title("Pre-captured Traffic (PCAP) Classification & Analysis")
     st.markdown("Upload a PCAP file to classify the network flows it contains.")
     
     # File uploader
@@ -917,7 +905,7 @@ def display_pcap_results(results):
     preds = results['preds']
     probs = results['probs']
     
-    st.success(f"✓ Processed {len(images)} flows")
+    st.success(f"Processed {len(images)} flows")
     
     # Summary statistics
     vpn_count = sum(1 for p in preds if p >= 6)
@@ -932,7 +920,7 @@ def display_pcap_results(results):
     # CLASS DISTRIBUTION SECTION - Bar Chart (Flows per Class)
     # =========================================================================
     st.markdown("---")
-    st.subheader("📊 Class Distribution")
+    st.subheader("Class Distribution")
     
     from collections import Counter
     import pandas as pd
@@ -992,7 +980,7 @@ def display_pcap_results(results):
     # FLOW VISUALIZATIONS AND TABLE
     # =========================================================================
     st.markdown("---")
-    st.subheader("🖼️ Flow Visualizations")
+    st.subheader("Flow Visualizations")
     
     # Controls for visualization
     col_ctrl1, col_ctrl2 = st.columns(2)
@@ -1032,7 +1020,7 @@ def display_pcap_results(results):
     data = []
     for i, (info, pred, prob) in enumerate(zip(flow_info, preds, probs)):
         conf = prob[pred] * 100
-        is_vpn = "✓ VPN" if pred >= 6 else "✗ Non-VPN"
+        is_vpn = "VPN" if pred >= 6 else "Non-VPN"
         data.append({
             "Flow #": i+1,
             "Protocol": info['proto'],
@@ -1049,7 +1037,7 @@ def display_pcap_results(results):
     # INDIVIDUAL FLOW VIEWER (NEW)
     # =========================================================================
     st.markdown("---")
-    st.subheader("🔍 Individual Flow Inspector")
+    st.subheader("Individual Flow Inspector")
     
     selected_flow = st.selectbox(
         "Select a flow to inspect in detail",
@@ -1112,21 +1100,18 @@ def display_pcap_results(results):
 def dataset_page(model, device):
     """Dataset evaluation page."""
     
-    st.title("📊 Evaluate Test Dataset")
+    st.title("Preprocessed Traffic Data Classification & Analysis")
     st.markdown("Load pre-processed test data and evaluate model performance.")
     
     # Dataset selection
     dataset_option = st.radio(
         "Select dataset",
-        ["Test Set", "Training Set", "Upload Custom .npy"]
+        ["Test Set", "Upload Custom .npy"]
     )
     
     if dataset_option == "Test Set":
         data_path = os.path.join(TEST_DATA_DIR, "test_data_memory_safe_own_nonVPN_p2p.npy")
         labels_path = os.path.join(TEST_DATA_DIR, "test_labels_memory_safe_own_nonVPN_p2p.npy")
-    elif dataset_option == "Training Set":
-        data_path = os.path.join(TEST_DATA_DIR, "train_data_memory_safe_own_nonVPN_p2p.npy")
-        labels_path = os.path.join(TEST_DATA_DIR, "train_labels_memory_safe_own_nonVPN_p2p.npy")
     else:
         col1, col2 = st.columns(2)
         with col1:
@@ -1199,7 +1184,7 @@ def display_eval_results(dataset, results):
     accuracy = 100 * np.mean(preds == labels)
     macro_f1 = f1_score(labels, preds, average='macro', zero_division=0)
     
-    st.success(f"✓ Evaluation complete!")
+    st.success(f"Evaluation complete!")
     
     # Metrics display
     col1, col2, col3 = st.columns(3)
@@ -1292,7 +1277,7 @@ def display_eval_results(dataset, results):
 def about_page():
     """About page with model information."""
     
-    st.title("ℹ️ About AttentionNet")
+    st.title("About AttentionNet")
     
     st.markdown("""
     ## Model Architecture
@@ -1332,11 +1317,11 @@ def about_page():
     ```
     Global Average Pooling → 128D vector
        ↓
-    FC (128→128) + Dropout(0.5) + ReLU
+    Dropout(0.5) → FC (128→128) → ReLU
        ↓
-    FC (128→128) + Dropout(0.3) + ReLU
+    Dropout(0.3) → FC (128→128) → ReLU
        ↓
-    FC (128→12) → 12 class probabilities
+    Dropout(0.2) → FC (128→12) → 12 class probabilities
     ```
     
     ---
