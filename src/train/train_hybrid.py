@@ -20,8 +20,8 @@ script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
-DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p/ratio_change")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/tiny_hybrid_ratio_change")
+DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2/ratio_change/random_undersampling")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/2layer_cnn_hybrid_3fc_random_undersampling")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters

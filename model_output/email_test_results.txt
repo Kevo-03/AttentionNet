@@ -2,25 +2,24 @@
 MODEL TEST RESULTS ON EMAIL TEST DATA
 ================================================================================
 
-Total Test Samples: 51
-Overall Test Accuracy: 3.92%
+Total Test Samples: 78
+Overall Test Accuracy: 5.13%
 
-Email (Label 1) Accuracy: 3.92%
-  Correct predictions: 2 / 51
+Email (Label 1) Accuracy: 5.13%
+  Correct predictions: 4 / 78
 
 Classification Report:
 --------------------------------------------------------------------------------
                     precision    recall  f1-score   support
 
      Chat (NonVPN)      0.000     0.000     0.000         0
-    Email (NonVPN)      1.000     0.039     0.075        51
+    Email (NonVPN)      1.000     0.051     0.098        78
      File (NonVPN)      0.000     0.000     0.000         0
       P2P (NonVPN)      0.000     0.000     0.000         0
 Streaming (NonVPN)      0.000     0.000     0.000         0
      VoIP (NonVPN)      0.000     0.000     0.000         0
-        File (VPN)      0.000     0.000     0.000         0
-   Streaming (VPN)      0.000     0.000     0.000         0
+        VoIP (VPN)      0.000     0.000     0.000         0
 
-          accuracy                          0.039        51
-         macro avg      0.125     0.005     0.009        51
-      weighted avg      1.000     0.039     0.075        51
+          accuracy                          0.051        78
+         macro avg      0.143     0.007     0.014        78
+      weighted avg      1.000     0.051     0.098        78

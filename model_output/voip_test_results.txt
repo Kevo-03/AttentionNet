@@ -2,11 +2,11 @@
 MODEL TEST RESULTS ON VOIP TEST DATA
 ================================================================================
 
-Total Test Samples: 141
-Overall Test Accuracy: 24.82%
+Total Test Samples: 27
+Overall Test Accuracy: 55.56%
 
-VoIP (Label 5) Accuracy: 24.82%
-  Correct predictions: 35 / 141
+VoIP (Label 5) Accuracy: 55.56%
+  Correct predictions: 15 / 27
 
 Classification Report:
 --------------------------------------------------------------------------------
@@ -17,8 +17,9 @@ Classification Report:
      File (NonVPN)      0.000     0.000     0.000         0
       P2P (NonVPN)      0.000     0.000     0.000         0
 Streaming (NonVPN)      0.000     0.000     0.000         0
-     VoIP (NonVPN)      1.000     0.248     0.398       141
+     VoIP (NonVPN)      1.000     0.556     0.714        27
+        VoIP (VPN)      0.000     0.000     0.000         0
 
-          accuracy                          0.248       141
-         macro avg      0.167     0.041     0.066       141
-      weighted avg      1.000     0.248     0.398       141
+          accuracy                          0.556        27
+         macro avg      0.143     0.079     0.102        27
+      weighted avg      1.000     0.556     0.714        27
