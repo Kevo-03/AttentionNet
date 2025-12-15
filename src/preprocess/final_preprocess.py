@@ -11,9 +11,9 @@ script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
-INPUT_DATA = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p/data_memory_safe.npy")
-INPUT_LABELS = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p/labels_memory_safe.npy")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p/ratio_change")
+INPUT_DATA = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p_2/data_memory_safe.npy")
+INPUT_LABELS = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p_2/labels_memory_safe.npy")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2/ratio_change")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -143,9 +143,9 @@ print(f"  Val distribution:   {dict(Counter(y_val))}")
 print(f"  Test distribution:  {dict(Counter(y_test))}")
 
 # ============================================================================
-# STEP 4: Augment ONLY Training Data for Minority Classes
+# STEP 4: Augment ONLY Training Data for Minority Classes (with 3x cap)
 # ============================================================================
-print(f"\n[Step 4/6] Augmenting minority classes in TRAINING set only...")
+print(f"\n[Step 4/6] Augmenting minority classes in TRAINING set only (max 3x augmentation)...")
 
 def augment_image(img):
     """Minimal augmentation for network traffic"""
@@ -165,15 +165,7 @@ class_sizes = sorted(train_counter.values())
 median_size = class_sizes[len(class_sizes)//2]
 aug_target = min(median_size + 500, 3500)  # Don't oversample too much
 
-print(f"  Augmentation target: {aug_target} samples per minority class")
-
-augmented_train_images = []
-augmented_train_labels = []
-
-# ============================================================================
-# STEP 4: Augment ONLY Training Data for Minority Classes (with 2x cap)
-# ============================================================================
-print(f"\n[Step 4/6] Augmenting minority classes in TRAINING set only (max 2x augmentation)...")
+print(f"  Augmentation target: {aug_target} samples per minority class (with 3x cap per class)")
 
 augmented_train_images = []
 augmented_train_labels = []
@@ -279,6 +271,10 @@ for idx, (data, title) in enumerate([
     for bar, count in zip(bars, counts):
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 20,
                f'{count}', ha='center', va='bottom', fontsize=8)
+    
+    # Set y-axis limit to accommodate text labels
+    max_count = max(counts) if counts else 0
+    ax.set_ylim(0, max_count * 1.15)  # Add 15% padding above the tallest bar
 
 plt.tight_layout()
 plt.savefig(os.path.join(OUTPUT_DIR, "split_distribution.png"), dpi=150, bbox_inches='tight')

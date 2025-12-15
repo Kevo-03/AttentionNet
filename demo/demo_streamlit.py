@@ -233,7 +233,16 @@ def load_model():
     
     # Create model and load weights
     model = TrafficCNN_TinyTransformer(num_classes=12).to(device)
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
+    
+    # Try to use weights_only=True for security (PyTorch >= 1.13)
+    # Fall back to default behavior for older versions
+    try:
+        state_dict = torch.load(MODEL_PATH, map_location=device, weights_only=True)
+    except TypeError:
+        # Older PyTorch version that doesn't support weights_only parameter
+        state_dict = torch.load(MODEL_PATH, map_location=device)
+    
+    model.load_state_dict(state_dict)
     model.eval()  # Set to evaluation mode
     
     return model, device
@@ -444,28 +453,18 @@ def capture_page(model, device):
     st.markdown("---")
     if st.button("Start Capture", type="primary", use_container_width=True):
         
-        # Create placeholders for live updates
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        stats_text = st.empty()
-        
-        try:
-            images, flow_info = capture_live_traffic_with_progress(
-                interface, duration, max_flows, 
-                progress_bar, status_text, stats_text
-            )
-            
-            # Clear progress indicators
-            progress_bar.empty()
-            status_text.empty()
-            stats_text.empty()
-            
-        except PermissionError:
-            st.error("**Permission denied!** Live capture requires administrator privileges.")
-            return
-        except Exception as e:
-            st.error(f"Capture error: {e}")
-            return
+        # Show simple status message
+        with st.spinner(f"Capturing traffic on {interface} for {duration} seconds..."):
+            try:
+                images, flow_info = capture_live_traffic(
+                    interface, duration, max_flows
+                )
+            except PermissionError:
+                st.error("**Permission denied!** Live capture requires administrator privileges.")
+                return
+            except Exception as e:
+                st.error(f"Capture error: {e}")
+                return
         
         if not images:
             st.warning("No flows captured. Try a longer duration or check the interface name.")
@@ -1194,11 +1193,11 @@ def display_eval_results(dataset, results):
     
     st.markdown("---")
     
-    # Two columns: confusion matrix and sample images
-    col_cm, col_samples = st.columns([1, 1])
+    # Two columns: confusion matrix and per-class accuracy
+    col_cm, col_acc = st.columns([1.2, 1])
     
     with col_cm:
-        st.subheader("Confusion Matrix")
+        st.subheader("Normalized Confusion Matrix (Row-wise)")
         
         # Create confusion matrix
         all_labels = np.unique(np.concatenate([labels, preds]))
@@ -1206,57 +1205,101 @@ def display_eval_results(dataset, results):
         cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         cm_norm = np.nan_to_num(cm_norm)
         
-        fig, ax = plt.subplots(figsize=(10, 8))
+        fig, ax = plt.subplots(figsize=(12, 10))
         im = ax.imshow(cm_norm, cmap='Blues', vmin=0, vmax=1)
         
         # Labels
-        class_labels = [CLASS_NAMES.get(i, str(i))[:12] for i in all_labels]
+        class_labels = [CLASS_NAMES.get(i, str(i)) for i in all_labels]
         ax.set_xticks(range(len(all_labels)))
         ax.set_yticks(range(len(all_labels)))
-        ax.set_xticklabels(class_labels, rotation=45, ha='right', fontsize=8)
-        ax.set_yticklabels(class_labels, fontsize=8)
+        ax.set_xticklabels(class_labels, rotation=45, ha='right', fontsize=9)
+        ax.set_yticklabels(class_labels, fontsize=9)
         
-        # Add values
+        # Add percentage values
         for i in range(len(all_labels)):
             for j in range(len(all_labels)):
                 color = "white" if cm_norm[i, j] > 0.5 else "black"
-                ax.text(j, i, str(cm[i, j]), ha="center", va="center", 
-                       color=color, fontsize=7)
+                # Show as percentage with 2 decimal places (like 0.65, 0.82, etc.)
+                text = f'{cm_norm[i, j]:.2f}' if cm_norm[i, j] > 0 else '0.00'
+                ax.text(j, i, text, ha="center", va="center", 
+                       color=color, fontsize=8, fontweight='bold')
         
-        ax.set_xlabel('Predicted')
-        ax.set_ylabel('True')
-        ax.set_title(f'Confusion Matrix (Accuracy: {accuracy:.1f}%)')
+        ax.set_xlabel('Predicted Label', fontsize=11, fontweight='bold')
+        ax.set_ylabel('True Label', fontsize=11, fontweight='bold')
+        ax.set_title(f'Normalized Confusion Matrix (Row-wise) - Test Acc: {accuracy:.2f}%', 
+                    fontsize=13, fontweight='bold', pad=20)
         plt.colorbar(im, ax=ax)
         plt.tight_layout()
         st.pyplot(fig)
         plt.close()
     
-    with col_samples:
-        st.subheader("Sample Images by Class")
+    with col_acc:
+        st.subheader("Per-Class Accuracy")
         
-        # Show a few samples per class
-        unique_labels = np.unique(labels)
-        samples_per_class = 3
+        # Calculate per-class accuracy
+        per_class_acc = []
+        for label in all_labels:
+            mask = labels == label
+            if mask.sum() > 0:
+                acc = 100 * np.mean(preds[mask] == labels[mask])
+            else:
+                acc = 0
+            per_class_acc.append(acc)
         
-        fig, axes = plt.subplots(len(unique_labels), samples_per_class, 
-                                  figsize=(6, 2*len(unique_labels)))
+        # Create bar chart
+        fig, ax = plt.subplots(figsize=(8, 10))
+        y_pos = range(len(all_labels))
+        bars = ax.barh(y_pos, per_class_acc, color=[CLASS_COLORS[i] for i in all_labels],
+                       edgecolor='black', linewidth=0.8)
         
-        for i, label in enumerate(unique_labels):
-            class_images = images[labels == label]
-            for j in range(samples_per_class):
-                ax = axes[i, j] if len(unique_labels) > 1 else axes[j]
-                if j < len(class_images):
-                    ax.imshow(class_images[j], cmap='gray', vmin=0, vmax=255)
-                ax.axis('off')
-                if j == 0:
-                    name = CLASS_NAMES.get(label, str(label))
-                    if len(name) > 12:
-                        name = name[:10] + "..."
-                    ax.set_title(name, fontsize=8, loc='left')
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(class_labels, fontsize=9)
+        ax.set_xlabel('Accuracy (%)', fontsize=11, fontweight='bold')
+        ax.set_title('Per-Class Accuracy', fontsize=13, fontweight='bold', pad=15)
+        ax.set_xlim(0, 100)
+        ax.axvline(x=accuracy, color='red', linestyle='--', linewidth=2, 
+                  label=f'Overall Acc: {accuracy:.2f}%', alpha=0.7)
+        ax.grid(axis='x', alpha=0.3)
+        ax.legend(loc='lower right')
+        
+        # Add percentage labels on bars
+        for i, (bar, acc_val) in enumerate(zip(bars, per_class_acc)):
+            ax.text(acc_val + 1, bar.get_y() + bar.get_height()/2,
+                   f'{acc_val:.1f}%', va='center', fontsize=8, fontweight='bold')
         
         plt.tight_layout()
         st.pyplot(fig)
         plt.close()
+    
+    # Sample images section
+    st.markdown("---")
+    st.subheader("Sample Images by Class")
+    
+    unique_labels = np.unique(labels)
+    samples_per_class = 3
+    
+    # Calculate grid dimensions
+    n_classes = len(unique_labels)
+    fig, axes = plt.subplots(n_classes, samples_per_class, 
+                              figsize=(8, 1.8*n_classes))
+    
+    if n_classes == 1:
+        axes = axes.reshape(1, -1)
+    
+    for i, label in enumerate(unique_labels):
+        class_images = images[labels == label]
+        for j in range(samples_per_class):
+            ax = axes[i, j]
+            if j < len(class_images):
+                ax.imshow(class_images[j], cmap='gray', vmin=0, vmax=255)
+            ax.axis('off')
+            if j == 0:
+                name = CLASS_NAMES.get(label, str(label))
+                ax.set_title(name, fontsize=9, loc='left', fontweight='bold')
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close()
     
     # Classification report
     st.markdown("---")
