@@ -489,106 +489,6 @@ def capture_page(model, device):
         display_capture_results(st.session_state['capture_results'])
 
 
-def capture_live_traffic_with_progress(interface, duration, max_flows, progress_bar, status_text, stats_text):
-    """
-    Capture live network traffic with progress updates.
-    
-    Uses helper functions from src/preprocess/preprocess_memory_safe.py:
-    - flow_key: Create bidirectional flow identifier
-    - anonymize_packet: Zero out IPs and MACs
-    - is_retransmission: Skip TCP retransmissions
-    - bytes_to_image: Convert buffer to 28x28 image
-    """
-    import time
-    from scapy.all import sniff, IP, TCP, UDP
-    
-    flow_buffers = defaultdict(bytearray)
-    seq_tracker = defaultdict(set)
-    packet_count = [0]  # Use list for mutable counter in nested function
-    
-    def packet_callback(pkt):
-        """Process each captured packet using imported helpers."""
-        if IP not in pkt or (TCP not in pkt and UDP not in pkt):
-            return
-        
-        packet_count[0] += 1
-        
-        # Skip retransmissions (using imported helper)
-        if is_retransmission(pkt, seq_tracker):
-            return
-        
-        # Get flow key (using imported helper)
-        key = flow_key(pkt)
-        buffer = flow_buffers[key]
-        if len(buffer) >= MAX_LEN:
-            return
-        
-        # Anonymize and get bytes (using imported helper)
-        pkt_bytes = anonymize_packet(pkt)
-        if not pkt_bytes:
-            return
-        
-        remaining = MAX_LEN - len(buffer)
-        buffer.extend(pkt_bytes[:remaining])
-    
-    # Capture in short bursts to show progress
-    start_time = time.time()
-    burst_duration = 1  # Update progress every 1 second
-    
-    while True:
-        elapsed = time.time() - start_time
-        remaining_time = duration - elapsed
-        
-        if remaining_time <= 0:
-            break
-        
-        # Update progress bar
-        progress = min(elapsed / duration, 1.0)
-        progress_bar.progress(progress)
-        
-        # Update status
-        status_text.info(f"**Capturing on {interface}...** {int(remaining_time)}s remaining")
-        stats_text.markdown(
-            f"**Packets:** {packet_count[0]} | "
-            f"**Flows:** {len(flow_buffers)}"
-        )
-        
-        # Capture for a short burst
-        capture_time = min(burst_duration, remaining_time)
-        try:
-            sniff(iface=interface, prn=packet_callback, timeout=capture_time, store=False)
-        except Exception as e:
-            if "Permission" in str(e) or "Operation not permitted" in str(e):
-                raise PermissionError(str(e))
-            raise
-    
-    # Final progress update
-    progress_bar.progress(1.0)
-    status_text.success(f"Capture complete!")
-    
-    # Convert buffers to images
-    images = []
-    flow_info = []
-    
-    for key, buffer in flow_buffers.items():
-        if max_flows and len(images) >= max_flows:
-            break
-        
-        # Convert to image (using imported helper)
-        img = bytes_to_image(bytes(buffer))
-        if img is None:
-            continue
-        
-        images.append(img)
-        
-        flow_info.append({
-            'src': f"{key[0]}:{key[2]}",
-            'dst': f"{key[1]}:{key[3]}",
-            'proto': 'TCP' if key[4] == 6 else 'UDP' if key[4] == 17 else str(key[4]),
-            'bytes': len(buffer)
-        })
-    
-    return images, flow_info
 
 
 def capture_live_traffic(interface, duration, max_flows):
@@ -1400,7 +1300,7 @@ def about_page():
        ↓
     1. Parse packets (Scapy)
        ↓
-    2. Group into flows (by IP+port)
+    2. Group into flows (by IP+port+protocol)
        ↓
     3. Remove retransmissions
        ↓
