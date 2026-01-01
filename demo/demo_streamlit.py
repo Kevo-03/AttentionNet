@@ -346,8 +346,8 @@ def process_pcap_bytes(pcap_bytes, max_flows=None):
         images.append(img)
         
         flow_info.append({
-            'src': f"{key[0]}:{key[2]}",
-            'dst': f"{key[1]}:{key[3]}",
+            'endpoint1': f"{key[0]}:{key[2]}",
+            'endpoint2': f"{key[1]}:{key[3]}",
             'proto': 'TCP' if key[4] == 6 else 'UDP' if key[4] == 17 else str(key[4]),
             'bytes': len(buffer)
         })
@@ -544,8 +544,8 @@ def capture_live_traffic(interface, duration, max_flows):
         images.append(img)
         
         flow_info.append({
-            'src': f"{key[0]}:{key[2]}",
-            'dst': f"{key[1]}:{key[3]}",
+            'endpoint1': f"{key[0]}:{key[2]}",
+            'endpoint2': f"{key[1]}:{key[3]}",
             'proto': 'TCP' if key[4] == 6 else 'UDP' if key[4] == 17 else str(key[4]),
             'bytes': len(buffer)
         })
@@ -711,8 +711,8 @@ def display_capture_results(results):
         info = flow_info[selected_flow]
         st.markdown(f"""
         **Details:**
-        - Source: `{info['src']}`
-        - Dest: `{info['dst']}`
+        - Endpoint 1: `{info['endpoint1']}`
+        - Endpoint 2: `{info['endpoint2']}`
         - Protocol: {info['proto']}
         - Bytes: {info['bytes']}
         """)
@@ -961,8 +961,8 @@ def display_pcap_results(results):
         info = flow_info[selected_flow]
         st.markdown(f"""
         **Flow Details:**
-        - **Source:** {info['src']}
-        - **Destination:** {info['dst']}
+        - **Endpoint 1:** {info['endpoint1']}
+        - **Endpoint 2:** {info['endpoint2']}
         - **Protocol:** {info['proto']}
         - **Bytes captured:** {info['bytes']}
         """)
