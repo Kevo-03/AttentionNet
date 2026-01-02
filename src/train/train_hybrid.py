@@ -20,15 +20,15 @@ script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
-DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2/ratio_change/random_undersampling")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/2layer_cnn_hybrid_3fc_random_undersampling")
+DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "model_output/new_model_hybrid")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Training parameters
 BATCH_SIZE = 128
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 100 
-WARMUP_EPOCHS = 10          # 5 is enough here
+WARMUP_EPOCHS = 10          
 BASE_LR = LEARNING_RATE  
 
 # Device selection (CPU / CUDA / MPS)

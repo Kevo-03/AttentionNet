@@ -46,7 +46,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "src"))
 # Import model architecture (shared with training code)
 from model.hybrid_tiny import TrafficCNN_TinyTransformer
 
-MODEL_PATH = os.path.join(PROJECT_ROOT, "model_output/memory_safe/hocaya_gosterilcek/p2p_change/2layer_cnn_hybrid_3fc/best_model.pth")
+MODEL_PATH = os.path.join(PROJECT_ROOT, "model_output/2layer_cnn_hybrid_3fc/best_model.pth")
 TEST_DATA_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2/ratio_change")
 
 # =============================================================================

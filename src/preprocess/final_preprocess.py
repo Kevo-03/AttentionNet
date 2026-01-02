@@ -11,15 +11,14 @@ script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(script_dir))
 
-INPUT_DATA = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p_2/data_memory_safe.npy")
-INPUT_LABELS = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/own_nonVPN_p2p_2/labels_memory_safe.npy")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/memory_safe/own_nonVPN_p2p_2/ratio_change")
+INPUT_DATA = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/data_memory_safe.npy")
+INPUT_LABELS = os.path.join(PROJECT_ROOT, "processed_data/memory_safe/labels_memory_safe.npy")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "processed_data/final/temp")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Parameters
-MIN_DENSITY = 0.01  # Keep flows with at least 5% non-zero pixels
-MIN_SAMPLES_PER_CLASS = 0  # Drop classes with fewer samples
+MIN_DENSITY = 0.01  # Keep flows with at least 1% non-zero pixels
 TARGET_BALANCE = 3500  # Target samples per class (balance training set)
 TRAIN_RATIO = 0.7
 VAL_RATIO = 0.15
@@ -37,9 +36,10 @@ print("CREATING PROPERLY SPLIT AND BALANCED DATASET")
 print("="*80)
 print(f"Strategy:")
 print(f"  1. Filter sparse samples (< {MIN_DENSITY*100:.0f}% density)")
-print(f"  2. Balance via undersampling (target: {TARGET_BALANCE} per class)")
-print(f"  3. Split: {TRAIN_RATIO*100:.0f}% train, {VAL_RATIO*100:.0f}% val, {TEST_RATIO*100:.0f}% test")
-print(f"  4. Augment ONLY training data")
+print(f"  2. Keep all classes (no class elimination)")
+print(f"  3. Balance via undersampling (target: {TARGET_BALANCE} per class)")
+print(f"  4. Split: {TRAIN_RATIO*100:.0f}% train, {VAL_RATIO*100:.0f}% val, {TEST_RATIO*100:.0f}% test")
+print(f"  5. Augment ONLY training data")
 print("="*80)
 
 # ============================================================================
@@ -60,32 +60,18 @@ filtered_densities = densities[density_mask]
 
 print(f"  After filtering: {len(filtered_images)} samples")
 
-# Remove classes with too few samples
-valid_classes = []
-for label in np.unique(filtered_labels):
-    count = np.sum(filtered_labels == label)
-    if count >= MIN_SAMPLES_PER_CLASS:
-        valid_classes.append(label)
-    else:
-        print(f"  Dropping Label {label} ({CLASS_NAMES.get(label)}): only {count} samples")
-
-# Keep only valid classes
-valid_mask = np.isin(filtered_labels, valid_classes)
-filtered_images = filtered_images[valid_mask]
-filtered_labels = filtered_labels[valid_mask]
-filtered_densities = filtered_densities[valid_mask]
-
-print(f"  Valid classes: {len(valid_classes)}")
-print(f"  Final after filtering: {len(filtered_images)} samples")
+# Get all unique classes
+classes = sorted(np.unique(filtered_labels).tolist())
+print(f"  Classes: {len(classes)}")
 
 # ============================================================================
 # STEP 2: Balance via Smart Undersampling
 # ============================================================================
-print(f"\n[Step 2/6] Balancing dataset...")
+print(f"\n[Step 2/6] Balancing dataset (keeping all classes)...")
 
 balanced_indices = []
 
-for label in valid_classes:
+for label in classes:
     label_mask = filtered_labels == label
     label_indices = np.where(label_mask)[0]
     n_available = len(label_indices)
@@ -170,7 +156,7 @@ print(f"  Augmentation target: {aug_target} samples per minority class (with 3x 
 augmented_train_images = []
 augmented_train_labels = []
 
-for label in valid_classes:
+for label in classes:
     n_real = train_counter[label]                   # real training samples for this class
     class_mask = y_train == label
     class_images = X_train[class_mask]
@@ -257,7 +243,7 @@ for idx, (data, title) in enumerate([
 ]):
     ax = axes[idx]
     counter = Counter(data)
-    labels_list = sorted(valid_classes)
+    labels_list = sorted(classes)
     counts = [counter[l] for l in labels_list]
     
     bars = ax.bar(range(len(labels_list)), counts, color='steelblue', edgecolor='black')
@@ -283,16 +269,16 @@ plt.close()
 
 # Visualization 2: Sample images from test set (real data only!)
 n_samples = 10
-fig, axes = plt.subplots(len(valid_classes), n_samples, figsize=(n_samples*1.5, len(valid_classes)*1.5))
+fig, axes = plt.subplots(len(classes), n_samples, figsize=(n_samples*1.5, len(classes)*1.5))
 
-if len(valid_classes) == 1:
+if len(classes) == 1:
     axes = axes.reshape(1, -1)
 
-for label_idx, label in enumerate(sorted(valid_classes)):
+for label_idx, label in enumerate(sorted(classes)):
     class_imgs = X_test[y_test == label]
     
     for i in range(n_samples):
-        ax = axes[label_idx, i] if len(valid_classes) > 1 else axes[i]
+        ax = axes[label_idx, i] if len(classes) > 1 else axes[i]
         
         if i < len(class_imgs):
             ax.imshow(class_imgs[i], cmap='gray', vmin=0, vmax=255)
@@ -319,11 +305,12 @@ with open(report_path, 'w') as f:
     f.write("="*80 + "\n\n")
     
     f.write("METHODOLOGY:\n")
-    f.write("  1. Filtered sparse samples (< 8% density)\n")
-    f.write("  2. Balanced via undersampling majority classes\n")
-    f.write("  3. Split into train/val/test BEFORE augmentation\n")
-    f.write("  4. Augmented ONLY minority classes in training set\n")
-    f.write("  5. Validation and test sets contain 100% real data\n\n")
+    f.write("  1. Filtered sparse samples (< 1% density)\n")
+    f.write("  2. Kept all classes (no class elimination)\n")
+    f.write("  3. Balanced via undersampling majority classes\n")
+    f.write("  4. Split into train/val/test BEFORE augmentation\n")
+    f.write("  5. Augmented ONLY minority classes in training set\n")
+    f.write("  6. Validation and test sets contain 100% real data\n\n")
     
     f.write(f"Original dataset:     {len(images):,} samples\n")
     f.write(f"After filtering:      {len(filtered_images):,} samples\n")
@@ -340,7 +327,7 @@ with open(report_path, 'w') as f:
     f.write("-"*80 + "\n")
     f.write("TRAINING SET DISTRIBUTION:\n")
     f.write("-"*80 + "\n")
-    for label in sorted(valid_classes):
+    for label in sorted(classes):
         count = train_counts[label]
         percentage = count / len(X_train_final) * 100
         class_name = CLASS_NAMES.get(label, f"Unknown-{label}")

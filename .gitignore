@@ -37,12 +37,15 @@ zips/
 
 # Processed outputs
 processed_data/
+own_captures/
 processed_test/
 processed_train/
 flows/
 idx/
 *.idx3-ubyte
 *.idx1-ubyte
+
+Diagrams/
 
 # Temporary test outputs
 tmp/
