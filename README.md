@@ -54,10 +54,10 @@ AttentionNet uses a hybrid CNN-Transformer architecture as its primary model:
 
 Network flows are converted into 28x28 grayscale images where each pixel represents a byte value (0-255). The spatial patterns in these images capture characteristics of different traffic types.
 
-![File Transfer Example](processed_data/memory_safe/visualization_label_2_NonVPN_File.png)
+![File Transfer Example](docs/images/visualization_label_2_NonVPN_File.png)
 *Figure 1: Sample flow images for File Transfer (NonVPN) traffic showing visual patterns in 28x28 grayscale representation.*
 
-![VPN Chat Example](processed_data/memory_safe/visualization_label_6_VPN_Chat.png)
+![VPN Chat Example](docs/images/visualization_label_6_VPN_Chat.png)
 *Figure 2: Sample flow images for Chat (VPN) traffic demonstrating how VPN encapsulation affects flow patterns.*
 
 ### Traffic Classes
@@ -251,7 +251,7 @@ This script:
 - **Validation Set**: 3,874 samples (100% real data, no augmentation)
 - **Test Set**: 3,875 samples (100% real data, no augmentation)
 
-![Dataset Distribution](processed_data/final/split_distribution.png)
+![Dataset Distribution](docs/images/split_distribution.png)
 *Figure 3: Distribution of samples across train, validation, and test sets after balancing and augmentation. Training set includes augmented samples for minority classes while validation and test sets contain only real data.*
 
 ---
@@ -300,7 +300,7 @@ model_output/2layer_cnn_hybrid_3fc/
 └── classification_report.txt
 ```
 
-![Training History](model_output/2layer_cnn_hybrid_3fc/training_history.png)
+![Training History](docs/images/training_history.png)
 *Figure 4: Training and validation loss/accuracy curves showing model convergence over epochs.*
 
 ---
@@ -385,7 +385,7 @@ AttentionNet/
 - **Macro F1-Score**: 0.8829
 - **Weighted F1-Score**: 0.864
 
-![Confusion Matrix](model_output/2layer_cnn_hybrid_3fc/confusion_matrix.png)
+![Confusion Matrix](docs/images/confusion_matrix.png)
 *Figure 5: Confusion matrix showing classification performance across all 12 traffic classes.*
 
 ### Per-Class Performance
@@ -410,7 +410,7 @@ AttentionNet/
 - Strong performance on VPN-encrypted traffic classes
 - Some confusion between similar traffic types (Chat vs Email)
 
-![Per-Class Accuracy](model_output/2layer_cnn_hybrid_3fc/per_class_accuracy.png)
+![Per-Class Accuracy](docs/images/per_class_accuracy.png)
 *Figure 6: Per-class accuracy showing performance variation across different traffic types.*
 
 ---
