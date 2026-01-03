@@ -31,6 +31,9 @@ A deep learning-based network traffic classifier that uses a hybrid CNN-Transfor
 
 AttentionNet uses a hybrid CNN-Transformer architecture as its primary model:
 
+![Architecture Diagram](docs/images/architecture_diagram.png)
+*Figure 1: Architecture overview of the TrafficCNN_TinyTransformer model showing the complete pipeline from input to classification.*
+
 #### CNN Backbone
 - **Conv Layer 1**: 1→64 channels, 3x3 kernel, BatchNorm, ReLU, MaxPool (28x28 → 14x14)
 - **Conv Layer 2**: 64→128 channels, 3x3 kernel, BatchNorm, ReLU, MaxPool (14x14 → 7x7)
@@ -55,10 +58,10 @@ AttentionNet uses a hybrid CNN-Transformer architecture as its primary model:
 Network flows are converted into 28x28 grayscale images where each pixel represents a byte value (0-255). The spatial patterns in these images capture characteristics of different traffic types.
 
 ![File Transfer Example](docs/images/visualization_label_2_NonVPN_File.png)
-*Figure 1: Sample flow images for File Transfer (NonVPN) traffic showing visual patterns in 28x28 grayscale representation.*
+*Figure 2: Sample flow images for File Transfer (NonVPN) traffic showing visual patterns in 28x28 grayscale representation.*
 
 ![VPN Chat Example](docs/images/visualization_label_6_VPN_Chat.png)
-*Figure 2: Sample flow images for Chat (VPN) traffic demonstrating how VPN encapsulation affects flow patterns.*
+*Figure 3: Sample flow images for Chat (VPN) traffic demonstrating how VPN encapsulation affects flow patterns.*
 
 ### Traffic Classes
 
@@ -252,7 +255,7 @@ This script:
 - **Test Set**: 3,875 samples (100% real data, no augmentation)
 
 ![Dataset Distribution](docs/images/split_distribution.png)
-*Figure 3: Distribution of samples across train, validation, and test sets after balancing and augmentation. Training set includes augmented samples for minority classes while validation and test sets contain only real data.*
+*Figure 4: Distribution of samples across train, validation, and test sets after balancing and augmentation. Training set includes augmented samples for minority classes while validation and test sets contain only real data.*
 
 ---
 
@@ -301,7 +304,7 @@ model_output/2layer_cnn_hybrid_3fc/
 ```
 
 ![Training History](docs/images/training_history.png)
-*Figure 4: Training and validation loss/accuracy curves showing model convergence over epochs.*
+*Figure 5: Training and validation loss/accuracy curves showing model convergence over epochs.*
 
 ---
 
@@ -386,7 +389,7 @@ AttentionNet/
 - **Weighted F1-Score**: 0.864
 
 ![Confusion Matrix](docs/images/confusion_matrix.png)
-*Figure 5: Confusion matrix showing classification performance across all 12 traffic classes.*
+*Figure 6: Confusion matrix showing classification performance across all 12 traffic classes.*
 
 ### Per-Class Performance
 
@@ -411,7 +414,7 @@ AttentionNet/
 - Some confusion between similar traffic types (Chat vs Email)
 
 ![Per-Class Accuracy](docs/images/per_class_accuracy.png)
-*Figure 6: Per-class accuracy showing performance variation across different traffic types.*
+*Figure 7: Per-class accuracy showing performance variation across different traffic types.*
 
 ---
 
