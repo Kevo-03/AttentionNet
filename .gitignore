@@ -85,3 +85,35 @@ Desktop.ini
 # Backup scripts or generated Python files
 test_*.py
 debug_*.py
+
+# ============================================================
+#  LATEX / DOCUMENTATION
+# ============================================================
+
+# LaTeX build files
+*.aux
+*.out
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.bbl
+*.blg
+
+# ============================================================
+#  STREAMLIT
+# ============================================================
+
+# Streamlit secrets and cache
+.streamlit/secrets.toml
+.streamlit/cache/
+
+# ============================================================
+#  MODEL FILES (Optional - uncomment if models are large)
+# ============================================================
+
+# Trained model weights (can be large)
+# model_output/**/*.pth
+# model_output/**/*.ckpt
