@@ -313,8 +313,10 @@ model_output/2layer_cnn_hybrid_3fc/
 Run the interactive Streamlit web application.
 
 ```bash
-streamlit run demo/demo_streamlit.py
+sudo streamlit run demo/demo_streamlit.py
 ```
+
+**Note**: `sudo` is required because Scapy needs elevated privileges to read PCAP files and access network interfaces.
 
 **Features:**
 - Upload PCAP files for classification
