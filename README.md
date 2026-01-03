@@ -450,7 +450,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contact
 
 - **Email**: turker.kivanc26@gmail.com
-- **GitHub Issues**: [Create an issue](https://github.com/yourusername/AttentionNet/issues)
 - **Project Link**: https://github.com/Kevo-03/AttentionNet
 
 ---
