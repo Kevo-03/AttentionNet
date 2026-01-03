@@ -50,6 +50,13 @@ AttentionNet uses a hybrid CNN-Transformer architecture as its primary model:
 - FC Layer 2: 128 → 128 (Dropout 0.3, ReLU)
 - FC Layer 3: 128 → 12 (Dropout 0.2)
 
+### Input Representation
+
+Network flows are converted into 28x28 grayscale images where each pixel represents a byte value (0-255). The spatial patterns in these images capture characteristics of different traffic types.
+
+![Flow Samples](processed_data/memory_safe/visualization/random_samples_30_per_class.png)
+*Figure 4: Sample flow images from different traffic classes showing visual patterns that distinguish various application types.*
+
 ### Traffic Classes
 
 | ID | Class | Description |
@@ -230,6 +237,9 @@ This script:
 - Augments minority classes in training set only
 - Saves to `processed_data/final/`
 
+![Dataset Distribution](processed_data/final/split_distribution.png)
+*Figure 5: Distribution of samples across train, validation, and test sets after balancing and augmentation.*
+
 ---
 
 ### Training
@@ -275,6 +285,9 @@ model_output/2layer_cnn_hybrid_3fc/
 ├── per_class_accuracy.png
 └── classification_report.txt
 ```
+
+![Training History](model_output/2layer_cnn_hybrid_3fc/training_history.png)
+*Figure 3: Training and validation loss/accuracy curves showing model convergence over epochs.*
 
 ---
 
@@ -358,6 +371,9 @@ AttentionNet/
 - **Macro F1-Score**: 0.8829
 - **Weighted F1-Score**: 0.864
 
+![Confusion Matrix](model_output/2layer_cnn_hybrid_3fc/confusion_matrix.png)
+*Figure 1: Confusion matrix showing classification performance across all 12 traffic classes.*
+
 ### Per-Class Performance
 
 | Class | Precision | Recall | F1-Score | Support |
@@ -379,6 +395,9 @@ AttentionNet/
 - Excellent performance on P2P traffic (NonVPN: 98.7%, VPN: 96.6% F1)
 - Strong performance on VPN-encrypted traffic classes
 - Some confusion between similar traffic types (Chat vs Email)
+
+![Per-Class Accuracy](model_output/2layer_cnn_hybrid_3fc/per_class_accuracy.png)
+*Figure 2: Per-class accuracy showing performance variation across different traffic types.*
 
 ---
 
