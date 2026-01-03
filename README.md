@@ -54,14 +54,11 @@ AttentionNet uses a hybrid CNN-Transformer architecture as its primary model:
 
 Network flows are converted into 28x28 grayscale images where each pixel represents a byte value (0-255). The spatial patterns in these images capture characteristics of different traffic types.
 
-![Flow Samples](processed_data/memory_safe/visualization/random_samples_30_per_class.png)
-*Figure 1: Sample flow images from different traffic classes showing visual patterns that distinguish various application types.*
+![File Transfer Example](processed_data/memory_safe/visualization_label_2_NonVPN_File.png)
+*Figure 1: Sample flow images for File Transfer (NonVPN) traffic showing visual patterns in 28x28 grayscale representation.*
 
-![Comprehensive Grid](processed_data/memory_safe/visualization/comprehensive_grid_50_per_class.png)
-*Figure 2: Detailed grid showing 50 samples per traffic class. Each row represents a different traffic category (NonVPN and VPN variants).*
-
-![Density Distribution](processed_data/memory_safe/visualization/density_distributions.png)
-*Figure 3: Distribution of non-zero pixel densities across all traffic classes, showing data quality and flow characteristics.*
+![VPN Chat Example](processed_data/memory_safe/visualization_label_6_VPN_Chat.png)
+*Figure 2: Sample flow images for Chat (VPN) traffic demonstrating how VPN encapsulation affects flow patterns.*
 
 ### Traffic Classes
 
@@ -244,15 +241,18 @@ This script:
 - Saves to `processed_data/final/`
 
 **Dataset Statistics:**
-- **Original Dataset**: 176,068 samples (unbalanced)
-- **After Filtering**: 176,068 samples
-- **After Balancing**: 25,827 samples (undersampled to reduce class imbalance)
-- **Final Training Set**: 25,333 samples (18,078 original + 7,255 augmented)
-- **Validation Set**: 3,874 samples (100% real data)
-- **Test Set**: 3,875 samples (100% real data)
+
+**Before Balancing:**
+- **Original Dataset**: 176,068 samples (highly imbalanced across 12 classes)
+
+**After Balancing:**
+- **Balanced Dataset**: 25,827 samples (undersampled to reduce class imbalance)
+- **Final Training Set**: 25,333 samples (18,078 original + 7,255 augmented for minority classes)
+- **Validation Set**: 3,874 samples (100% real data, no augmentation)
+- **Test Set**: 3,875 samples (100% real data, no augmentation)
 
 ![Dataset Distribution](processed_data/final/split_distribution.png)
-*Figure 4: Distribution of samples across train, validation, and test sets after balancing and augmentation. Training set includes augmented samples for minority classes while validation and test sets contain only real data.*
+*Figure 3: Distribution of samples across train, validation, and test sets after balancing and augmentation. Training set includes augmented samples for minority classes while validation and test sets contain only real data.*
 
 ---
 
@@ -301,7 +301,7 @@ model_output/2layer_cnn_hybrid_3fc/
 ```
 
 ![Training History](model_output/2layer_cnn_hybrid_3fc/training_history.png)
-*Figure 5: Training and validation loss/accuracy curves showing model convergence over epochs.*
+*Figure 4: Training and validation loss/accuracy curves showing model convergence over epochs.*
 
 ---
 
@@ -386,7 +386,7 @@ AttentionNet/
 - **Weighted F1-Score**: 0.864
 
 ![Confusion Matrix](model_output/2layer_cnn_hybrid_3fc/confusion_matrix.png)
-*Figure 6: Confusion matrix showing classification performance across all 12 traffic classes.*
+*Figure 5: Confusion matrix showing classification performance across all 12 traffic classes.*
 
 ### Per-Class Performance
 
@@ -411,7 +411,7 @@ AttentionNet/
 - Some confusion between similar traffic types (Chat vs Email)
 
 ![Per-Class Accuracy](model_output/2layer_cnn_hybrid_3fc/per_class_accuracy.png)
-*Figure 7: Per-class accuracy showing performance variation across different traffic types.*
+*Figure 6: Per-class accuracy showing performance variation across different traffic types.*
 
 ---
 
