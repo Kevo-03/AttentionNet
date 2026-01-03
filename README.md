@@ -425,7 +425,7 @@ AttentionNet/
 If you use AttentionNet in your research, please cite:
 
 ```bibtex
-@article{AttentionNet2024,
+@article{AttentionNet2025,
   title={AttentionNet: Network Traffic Classification with Hybrid CNN-Transformer Architecture},
   author={Your Name},
   year={2024}
