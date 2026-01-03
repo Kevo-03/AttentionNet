@@ -160,6 +160,30 @@ categorized_pcaps/
     └── VoIP/
 ```
 
+### Organizing the ISCX Dataset
+
+Before preprocessing, use the `categorize_pcaps.py` script to organize raw ISCX dataset files into the proper structure:
+
+```bash
+python categorize_pcaps.py
+```
+
+**What it does:**
+- Reads PCAP files from `raw_pcaps/VPN/` and `raw_pcaps/NonVPN/` directories
+- Categorizes files based on filename patterns (e.g., "hangout_chat", "skype_audio", "bittorrent")
+- Organizes them into `categorized_pcaps/` with the structure shown above
+- Handles various naming conventions from the ISCX dataset
+
+**Category Patterns:**
+- **Chat**: aim_chat, facebook_chat, hangouts_chat, icq_chat, skype_chat
+- **Email**: email, gmailchat
+- **File**: ftps, sftp, scp, skype_file
+- **P2P**: bittorrent
+- **Streaming**: youtube, vimeo, netflix, spotify
+- **VoIP**: voipbuster, skype_audio, facebook_audio, hangouts_audio
+
+Files that don't match any pattern are moved to an "Uncategorized" folder for manual review.
+
 ---
 
 ## Usage
@@ -282,6 +306,7 @@ AttentionNet/
 ├── requirements.txt
 ├── LICENSE
 ├── .gitignore
+├── categorize_pcaps.py            # Script to organize ISCX dataset
 │
 ├── src/
 │   ├── model/
@@ -317,7 +342,7 @@ AttentionNet/
 │       ├── per_class_accuracy.png
 │       └── classification_report.txt
 │
-├── categorized_pcaps/                 # Raw PCAP files (not included in the repository)
+├── categorized_pcaps/                 # Raw PCAP files
 ├── processed_data/                    # Preprocessed data (not included in the repository)
 └── venv/                              # Virtual environment
 ```
