@@ -158,7 +158,7 @@ print("\n[2/5] Initializing model...")
 
 model = TrafficCNN_TinyTransformer(num_classes=N_CLASSES).to(DEVICE)
 criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-optimizer = optim.AdamW(model.parameters(), lr=BASE_LR * 0.1, weight_decay=1e-4)
+optimizer = optim.AdamW(model.parameters(), lr=BASE_LR, weight_decay=1e-4)
 
 scheduler = CosineAnnealingWarmRestarts(
     optimizer,
@@ -250,6 +250,21 @@ for epoch in range(NUM_EPOCHS):
     print(f"\nEpoch {epoch+1}/{NUM_EPOCHS}")
     print("-" * 40)
 
+    # ---- LR scheduling: manual warmup, then cosine warm restarts ----
+    if epoch < WARMUP_EPOCHS:
+        # linear warmup from 0.1 * BASE_LR -> BASE_LR
+        warmup_frac = (epoch + 1) / WARMUP_EPOCHS  # goes 1/WARMUP .. 1
+        lr = BASE_LR * (0.1 + 0.9 * warmup_frac)
+        for g in optimizer.param_groups:
+            g['lr'] = lr
+        print(f"Warmup LR set to: {lr:.6f}")
+    else:
+        old_lr = optimizer.param_groups[0]['lr']
+        scheduler.step()
+        new_lr = optimizer.param_groups[0]['lr']
+        if new_lr != old_lr:
+            print(f"LR updated (restart schedule): {old_lr:.6f} -> {new_lr:.6f}")
+
     train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, DEVICE)
     val_loss, val_acc, val_macro_f1 = validate(model, val_loader, criterion, DEVICE)
 
@@ -262,20 +277,7 @@ for epoch in range(NUM_EPOCHS):
     print(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
     print(f"Val   Loss: {val_loss:.4f} | Val   Acc: {val_acc:.2f}% | Val Macro F1: {val_macro_f1:.4f}")
 
-        # ---- LR scheduling: manual warmup, then cosine warm restarts ----
-    if epoch < WARMUP_EPOCHS:
-        # linear warmup from 0.1 * BASE_LR → BASE_LR
-        warmup_frac = (epoch + 1) / WARMUP_EPOCHS  # goes 1/WARMUP .. 1
-        lr = BASE_LR * (0.1 + 0.9 * warmup_frac)
-        for g in optimizer.param_groups:
-            g['lr'] = lr
-        print(f"Warmup LR set to: {lr:.6f}")
-    else:
-        old_lr = optimizer.param_groups[0]['lr']
-        scheduler.step()
-        new_lr = optimizer.param_groups[0]['lr']
-        if new_lr != old_lr:
-            print(f"LR updated (restart schedule): {old_lr:.6f} → {new_lr:.6f}")
+
 
     # Early stopping and best model still based on validation accuracy
     if val_acc > best_acc:
