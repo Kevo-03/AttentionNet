@@ -115,5 +115,5 @@ debug_*.py
 # ============================================================
 
 # Trained model weights (can be large)
-# model_output/**/*.pth
-# model_output/**/*.ckpt
+model_output/own_captures_test2
+model_output/temp
